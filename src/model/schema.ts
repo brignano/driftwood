@@ -20,7 +20,10 @@ export const Entity = z.object({
   name: z.string().optional(),
   /** Visual + logical grouping — becomes a subgraph when rendered. */
   group: z.string().optional(),
-  provider: z.string().optional(),
+  /** Where it runs: aws, gcp, azure, onprem, kubernetes. */
+  platform: z.string().optional(),
+  /** Which provider observed it. Provenance, set by the merge step. */
+  source: z.string().optional(),
   level: Level.default('container'),
   /** Free-form metadata. Excluded from drift comparison by default. */
   tags: z.record(z.string()).optional(),
@@ -64,6 +67,16 @@ export const Model = z.object({
   edges: z.array(Edge).default([]),
   views: z.array(View).default([]),
   ignore: Ignore.default({ entities: [], kinds: [], edges: [] }),
+  /**
+   * Cross-provider identity. Maps a provider's native id to the canonical
+   * entity id, so Dynatrace's `SERVICE-A1B2` and Terraform's
+   * `aws_lambda_function.forwarder` collapse into one node.
+   *
+   * This is deliberately manual. Automatic identity resolution across
+   * declarative and runtime sources is the hard, unsolved part of this
+   * problem, and guessing wrong silently corrupts the graph.
+   */
+  aliases: z.record(z.string()).default({}),
   /**
    * Declared blind spots. Read-only credentials never see everything, and
    * "unknown" must never be silently reported as "absent".

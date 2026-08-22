@@ -4,11 +4,17 @@
   "description": "Architecture as code, reconciled with live infrastructure.",
   "type": "module",
   "license": "MIT",
-  "bin": { "driftwood": "./dist/cli.js" },
+  "bin": {
+    "driftwood": "./dist/cli.js"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist"],
-  "engines": { "node": ">=20" },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx src/cli.ts",
@@ -25,5 +31,10 @@
     "tsx": "^4.19.1",
     "typescript": "^5.6.2",
     "vitest": "^2.1.2"
+  },
+  "peerDependenciesMeta": {
+    "@hpcc-js/wasm-graphviz": {
+      "optional": true
+    }
   }
 }

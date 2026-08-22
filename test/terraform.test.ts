@@ -61,9 +61,14 @@ describe('importTerraformState', () => {
     expect(model.entities.find((e) => e.id === 'aws_iam_role.lambda_exec')?.group).toBe('iam')
   })
 
-  it('extracts the short provider name', () => {
+  it('extracts the short provider name as the platform', () => {
     const model = importTerraformState(state)
-    expect(model.entities[0]?.provider).toBe('aws')
+    expect(model.entities[0]?.platform).toBe('aws')
+  })
+
+  it('stamps provenance on every entity', () => {
+    const model = importTerraformState(state)
+    expect(model.entities.every((e) => e.source === 'terraform')).toBe(true)
   })
 
   it('produces a model that passes validation', () => {

@@ -15,11 +15,35 @@ Two problems that are usually treated separately share one root cause:
 
 Nobody owns the middle. driftwood is the middle.
 
-### No Graphviz
+### Graphviz: optional, never required
 
-`mingrammer/diagrams` requires the Graphviz **system binary**, which is often impossible to get approved inside a corporate environment. driftwood has **zero native dependencies** — it renders to Mermaid, which GitHub and GitLab render natively, so the reader installs nothing at all.
+`mingrammer/diagrams` requires the Graphviz **system binary**, which is often impossible to get approved inside a corporate environment. driftwood supports Graphviz but never requires it:
 
-This is a hard constraint, not a preference. A tool that needs a system package doesn't get installed.
+| Engine | Needs | Output |
+|---|---|---|
+| `graphviz` (native) | `dot` on PATH | SVG, best layout |
+| `graphviz` (WASM) | `npm i @hpcc-js/wasm-graphviz` | SVG — **real Graphviz, no system package, no admin rights** |
+| `dot` | nothing | DOT source (it's just text) |
+| `mermaid` | nothing | Mermaid, renders natively in GitHub |
+
+`--engine auto` picks the best available and silently falls back. The same command and the same config work on a developer laptop with Graphviz and on a locked-down corporate machine without it:
+
+```bash
+$ driftwood engines
+graphviz   unavailable  no `dot` on PATH and @hpcc-js/wasm-graphviz is not installed - run `npm install @hpcc-js/wasm-graphviz` for a no-system-package build
+mermaid    available    built-in
+dot        available    built-in
+
+auto would use: mermaid (built-in)
+
+$ npm install @hpcc-js/wasm-graphviz
+$ driftwood engines
+graphviz   available    @hpcc-js/wasm-graphviz
+...
+auto would use: graphviz (@hpcc-js/wasm-graphviz)
+```
+
+The WASM tier is the important one: it is genuinely Graphviz — same layouts, same DOT semantics — installed over plain npm. "With Graphviz" and "installable at work" stop being mutually exclusive.
 
 ## How it fits together
 
@@ -130,6 +154,62 @@ npx tsx src/cli.ts reconcile examples/architecture.yaml \
 
 Exits **1** on drift and **0** when clean, so it works directly as a CI gate. Output is markdown because its destination is a pull request body.
 
+## Extensible by design
+
+Providers and renderers are both registries. A third-party plugin registers exactly the way a built-in does — there is no separate plugin API.
+
+### Providers — where facts come from
+
+| Provider | Kind | Platforms | Status |
+|---|---|---|---|
+| `terraform` | declarative | **any** (AWS, GCP, Azure, vSphere, on-prem) | built in |
+| `dynatrace` | runtime | aws, gcp, azure, onprem, kubernetes | built in |
+| Splunk, cloud APIs, OTel, Kubernetes | — | — | extension point ready |
+
+Terraform is platform-agnostic on purpose: one provider covers every target, because the platform is whatever the state file declares.
+
+The `declarative` / `runtime` split matters. Terraform says what *should* exist; Dynatrace says what is *actually running*. A service Terraform declares but Dynatrace has never seen is a very different finding from one neither knows about. When both describe the same entity, the declarative source wins on naming and grouping — IaC resource names beat monitoring display names.
+
+Adding one is a small, well-defined job: see [`.claude/skills/add-provider/SKILL.md`](.claude/skills/add-provider/SKILL.md).
+
+### Configuration
+
+Wiring is declarative, so adding a provider or switching engines is a config edit rather than a code change:
+
+```yaml
+# driftwood.config.yaml
+model: architecture.yaml
+
+providers:
+  - use: terraform
+    with:
+      statePath: ./terraform.tfstate
+  - use: dynatrace
+    with:
+      url: https://abc12345.live.dynatrace.com
+      tokenEnv: DYNATRACE_API_TOKEN   # the env var NAME, never the token
+
+render:
+  - view: context
+    to: docs/context.mmd
+    engine: auto
+```
+
+```bash
+driftwood reconcile architecture.yaml -c driftwood.config.yaml
+```
+
+### Cross-source identity is explicit, never guessed
+
+Terraform calls it `aws_lambda_function.forwarder`; Dynatrace calls it `SERVICE-A1B2`. Nothing in either payload proves they are the same thing, so driftwood **does not guess**:
+
+```yaml
+aliases:
+  SERVICE-A1B2: aws_lambda_function.forwarder
+```
+
+Without an alias the two stay separate nodes. That is deliberate — a duplicated node is visible and fixable, whereas a wrongly merged node silently corrupts the graph. Where providers disagree about a merged entity, the disagreement is resolved *and reported*, never hidden.
+
 ## The drift policy
 
 This is the design decision most likely to sink the project in practice. Report too much and every run becomes noise that gets muted; report too little and the model rots anyway.
@@ -162,19 +242,29 @@ These are printed with every drift report. "Always matches live platform data" i
 
 ```
 src/
-  model/schema.ts        the model — entities, edges, views, ignore, coverage
+  registry.ts            shared name -> implementation registry
+  model/schema.ts        the model — entities, edges, views, aliases, ignore, coverage
   model/validate.ts      schema + referential integrity
-  providers/terraform.ts Terraform state (v4) -> observed model
-  render/mermaid.ts      model + view -> Mermaid
+  model/merge.ts         multi-provider merge, provenance, conflict reporting
+  providers/types.ts     the provider extension point
+  providers/terraform.ts declarative — any platform Terraform manages
+  providers/dynatrace.ts runtime — Smartscape topology, read-only
+  render/types.ts        the renderer extension point (probe + render)
+  render/select.ts       shared view scoping
+  render/mermaid.ts      always available
+  render/dot.ts          DOT source, always available
+  render/graphviz.ts     SVG via native dot or WASM, with tier detection
   reconcile/index.ts     declared vs observed -> drift report
-  cli.ts                 validate · render · import · reconcile
-examples/                a worked AWS example, plus a deliberately drifted copy
+  config.ts              driftwood.config.yaml
+  cli.ts                 validate · render · engines · providers · import · reconcile
+examples/                a worked AWS example, a drifted copy, and a config
+.claude/skills/          add-provider and add-renderer walkthroughs for agents
 ```
 
 ## Development
 
 ```bash
-npm test        # 46 tests
+npm test        # 73 tests
 npm run typecheck
 npm run build
 ```
@@ -184,14 +274,17 @@ npm run build
 Built:
 
 - [x] The model, with a schema and a real validator
-- [x] Terraform state provider
-- [x] Mermaid renderer with scoped views
+- [x] Pluggable provider registry — Terraform (any platform) and Dynatrace built in
+- [x] Pluggable renderer registry — Mermaid, DOT, and Graphviz with automatic fallback
+- [x] Multi-provider merge with provenance, explicit aliases, and conflict reporting
+- [x] Declarative `driftwood.config.yaml` wiring
 - [x] Reconciler with an explicit drift policy, wired as a CI gate
 
 Deliberately not built yet, roughly in order:
 
 - [ ] Open the drift report as an actual pull request, not just a CI failure
 - [ ] Live cloud API providers (AWS, GCP) to catch resources no IaC owns
+- [ ] A Splunk provider (the extension point is ready; no implementation shipped yet)
 - [ ] Preserve human/agent annotations across regeneration
 - [ ] Health overlay on the 2D graph (the renderer already accepts it)
 - [ ] Interactive viewer, blast-radius traversal

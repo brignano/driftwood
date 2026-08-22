@@ -100,7 +100,8 @@ export function importTerraformState(state: TfState, opts: ImportOptions = {}): 
       kind: r.type,
       name: displayName(r, attrs),
       group: groupFor(r.type),
-      provider: providerName(r.provider),
+      platform: providerName(r.provider),
+      source: 'terraform',
       level: 'container',
       ...(isData ? { tags: { mode: 'data' } } : {}),
     })
@@ -134,3 +135,36 @@ export function parseTerraformState(source: string): TfState {
   }
   return parsed
 }
+
+
+// ---------------------------------------------------------------------------
+// Provider interface binding
+// ---------------------------------------------------------------------------
+
+import { readFileSync } from 'node:fs'
+import { z } from 'zod'
+import { defineProvider } from './types.js'
+
+export const terraformConfigSchema = z.object({
+  /** Path to terraform.tfstate, or the output of `terraform show -json`. */
+  statePath: z.string(),
+  includeDataSources: z.boolean().default(false),
+})
+
+/**
+ * Terraform is platform-agnostic on purpose: the same provider covers AWS,
+ * GCP, Azure, vSphere, and on-prem, because the platform is simply whatever
+ * the state file declares. One provider, every target.
+ */
+export const terraformProvider = defineProvider({
+  name: 'terraform',
+  description: 'Terraform state (format v4) — any platform Terraform manages',
+  kind: 'declarative',
+  platforms: ['*'],
+  configSchema: terraformConfigSchema,
+  observe(config, ctx) {
+    const path = ctx.resolvePath(config.statePath)
+    const state = parseTerraformState(readFileSync(path, 'utf8'))
+    return importTerraformState(state, { includeDataSources: config.includeDataSources })
+  },
+})

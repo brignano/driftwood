@@ -1,5 +1,7 @@
-import type { Entity, Model, View } from '../model/schema.js'
-import { matches } from '../model/validate.js'
+import type { Entity, Model } from '../model/schema.js'
+import { selectEntities } from './select.js'
+import { defineRenderer } from './types.js'
+import type { RenderContext } from './types.js'
 
 /**
  * Mermaid is the default renderer for one reason: it renders natively in
@@ -51,23 +53,7 @@ function renderNode(e: Entity): string {
   }
 }
 
-export function selectEntities(model: Model, view?: View): Entity[] {
-  if (!view) return model.entities
-  return model.entities.filter((e) => {
-    const target = [e.id, e.group ?? '']
-    const included =
-      view.include.length === 0 || view.include.some((p) => target.some((t) => t !== '' && matches(p, t)))
-    const excluded = view.exclude.some((p) => target.some((t) => t !== '' && matches(p, t)))
-    return included && !excluded
-  })
-}
-
-export interface RenderOptions {
-  view?: string
-  direction?: 'LR' | 'TD'
-  /** Runtime health, applied at render time. Never committed to the model. */
-  health?: Record<string, 'healthy' | 'degraded' | 'down'>
-}
+export type RenderOptions = RenderContext
 
 export function renderMermaid(model: Model, opts: RenderOptions = {}): string {
   const view = opts.view ? model.views.find((v) => v.id === opts.view) : undefined
@@ -119,3 +105,17 @@ export function renderMermaid(model: Model, opts: RenderOptions = {}): string {
 
   return lines.join('\n') + '\n'
 }
+
+export const mermaidRenderer = defineRenderer({
+  name: 'mermaid',
+  description: 'Mermaid flowchart — renders natively in GitHub, zero install',
+  extension: 'mmd',
+  priority: 50,
+  async probe() {
+    // Always available: it is string generation with no engine behind it.
+    return { available: true, via: 'built-in' }
+  },
+  async render(model, ctx) {
+    return renderMermaid(model, ctx)
+  },
+})

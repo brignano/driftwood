@@ -19,9 +19,47 @@ jobs:
       - run: npm test
       - run: npm run build
 
-  # Proves the drift gate works against the committed example. In a real
-  # deployment this step would run `terraform show -json` against live state
-  # with a read-only role instead of reading a fixture.
+  # The base install must work with no Graphviz of any kind. This job proves
+  # the fallback path is real rather than assumed.
+  no-graphviz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Assert no native Graphviz is present
+        run: |
+          if command -v dot >/dev/null 2>&1; then
+            echo "dot unexpectedly on PATH; this job must run without it"; exit 1
+          fi
+      - run: npm test
+      - name: auto must fall back to Mermaid
+        run: |
+          npx tsx src/cli.ts engines
+          npx tsx src/cli.ts engines | grep -q "auto would use: mermaid"
+
+  # ...and the Graphviz path must work with no system package, via WASM.
+  wasm-graphviz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save @hpcc-js/wasm-graphviz
+      - run: npm test
+      - name: auto must upgrade to Graphviz, and SVG must render
+        run: |
+          npx tsx src/cli.ts engines | grep -q "auto would use: graphviz"
+          npx tsx src/cli.ts render examples/architecture.yaml --view dns --engine graphviz | grep -q "<svg"
+
+  # Proves the drift gate works. In a real deployment this would run
+  # `terraform show -json` against live state with a read-only role.
   drift:
     runs-on: ubuntu-latest
     steps:
@@ -31,5 +69,11 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Reconcile model against Terraform state
-        run: npx tsx src/cli.ts reconcile examples/architecture.yaml --terraform examples/aws-config.tfstate.json
+      - name: Reconcile via config (multi-provider path)
+        run: npx tsx src/cli.ts reconcile examples/architecture.yaml -c examples/driftwood.config.yaml
+      - name: Drift must be detected and must fail the build
+        run: |
+          if npx tsx src/cli.ts reconcile examples/architecture.yaml \
+               --terraform examples/aws-config.drifted.tfstate.json; then
+            echo "expected drift to exit non-zero"; exit 1
+          fi

@@ -1,0 +1,45 @@
+# driftwood configuration — the plug-and-play surface.
+#
+# Adding a provider or switching render engines is a config edit, never a code
+# change. Run:  driftwood reconcile examples/architecture.yaml -c examples/driftwood.config.yaml
+
+model: architecture.yaml
+
+providers:
+  # Declarative source: what infrastructure is *supposed* to exist.
+  # Terraform is platform-agnostic — the same provider covers AWS, GCP, Azure,
+  # vSphere and on-prem, because the platform is whatever the state declares.
+  - use: terraform
+    with:
+      statePath: ./aws-config.tfstate.json
+      includeDataSources: false
+
+  # Runtime source: what is *actually running*. Commented out because it needs
+  # a live environment and a token; uncomment to reconcile intent against
+  # reality rather than intent against itself.
+  #
+  # - use: dynatrace
+  #   with:
+  #     url: https://abc12345.live.dynatrace.com
+  #     tokenEnv: DYNATRACE_API_TOKEN   # the env var name, never the token
+  #     platform: aws
+  #     entitySelectors:
+  #       - type("SERVICE")
+  #       - type("HOST")
+
+render:
+  # engine: auto  -> Graphviz if it is available (native binary or the WASM
+  #                  package), otherwise Mermaid. Same config works on a
+  #                  developer laptop and a locked-down corporate machine.
+  - view: context
+    to: docs/context.mmd
+    engine: auto
+
+  # Pin an engine when the output format matters to something downstream.
+  - view: email
+    to: docs/email.mmd
+    engine: mermaid
+
+  - view: dns
+    to: docs/dns.dot
+    engine: dot

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Model } from '../src/model/schema.js'
-import { renderMermaid, selectEntities } from '../src/render/mermaid.js'
+import { renderMermaid } from '../src/render/mermaid.js'
+import { selectEntities } from '../src/render/select.js'
 
 const model = Model.parse({
   version: 1,
