@@ -1,0 +1,149 @@
+version: 1
+name: aws-config
+entities:
+  - id: aws_cloudwatch_log_group.forwarder
+    kind: aws_cloudwatch_log_group
+    name: /aws/lambda/email-forwarder
+    group: cloudwatch
+    provider: aws
+    level: container
+  - id: aws_iam_role_policy.lambda_s3_read
+    kind: aws_iam_role_policy
+    name: email-forwarder-s3-read
+    group: iam
+    provider: aws
+    level: container
+  - id: aws_iam_role.lambda_exec
+    kind: aws_iam_role
+    name: email-forwarder-exec
+    group: iam
+    provider: aws
+    level: container
+  - id: aws_lambda_function.email_forwarder
+    kind: aws_lambda_function
+    name: email-forwarder
+    group: lambda
+    provider: aws
+    level: container
+  - id: aws_route53_record.apex
+    kind: aws_route53_record
+    name: brignano.io
+    group: route53
+    provider: aws
+    level: container
+  - id: aws_route53_record.mx
+    kind: aws_route53_record
+    name: brignano.io
+    group: route53
+    provider: aws
+    level: container
+  - id: aws_route53_record.www
+    kind: aws_route53_record
+    name: www.brignano.io
+    group: route53
+    provider: aws
+    level: container
+  - id: aws_route53_zone.primary
+    kind: aws_route53_zone
+    name: brignano.io
+    group: route53
+    provider: aws
+    level: container
+  - id: aws_s3_bucket.emails
+    kind: aws_s3_bucket
+    name: brignano.io-emails
+    group: s3
+    provider: aws
+    level: container
+  - id: aws_ses_receipt_rule_set.main
+    kind: aws_ses_receipt_rule_set
+    name: main
+    group: ses
+    provider: aws
+    level: container
+  - id: aws_ses_receipt_rule.archive
+    kind: aws_ses_receipt_rule
+    name: archive-hi
+    group: ses
+    provider: aws
+    level: container
+  - id: aws_ses_receipt_rule.forward
+    kind: aws_ses_receipt_rule
+    name: forward-hi
+    group: ses
+    provider: aws
+    level: container
+  - id: aws_ses_receipt_rule.noreply
+    kind: aws_ses_receipt_rule
+    name: bounce-noreply
+    group: ses
+    provider: aws
+    level: container
+edges:
+  - from: aws_cloudwatch_log_group.forwarder
+    to: aws_lambda_function.email_forwarder
+    kind: depends-on
+  - from: aws_iam_role_policy.lambda_s3_read
+    to: aws_iam_role.lambda_exec
+    kind: depends-on
+  - from: aws_iam_role_policy.lambda_s3_read
+    to: aws_s3_bucket.emails
+    kind: depends-on
+  - from: aws_lambda_function.email_forwarder
+    to: aws_iam_role.lambda_exec
+    kind: depends-on
+  - from: aws_lambda_function.email_forwarder
+    to: aws_s3_bucket.emails
+    kind: depends-on
+  - from: aws_route53_record.apex
+    to: aws_route53_zone.primary
+    kind: depends-on
+  - from: aws_route53_record.mx
+    to: aws_route53_zone.primary
+    kind: depends-on
+  - from: aws_route53_record.www
+    to: aws_route53_zone.primary
+    kind: depends-on
+  - from: aws_ses_receipt_rule.archive
+    to: aws_s3_bucket.emails
+    kind: depends-on
+  - from: aws_ses_receipt_rule.archive
+    to: aws_ses_receipt_rule_set.main
+    kind: depends-on
+  - from: aws_ses_receipt_rule.forward
+    to: aws_lambda_function.email_forwarder
+    kind: depends-on
+  - from: aws_ses_receipt_rule.forward
+    to: aws_ses_receipt_rule_set.main
+    kind: depends-on
+  - from: aws_ses_receipt_rule.noreply
+    to: aws_ses_receipt_rule_set.main
+    kind: depends-on
+views:
+  - id: context
+    title: Everything, one page
+    level: context
+    include: []
+    exclude: []
+  - id: email
+    title: Inbound email path
+    level: container
+    include:
+      - ses
+      - s3
+      - lambda
+    exclude: []
+  - id: dns
+    title: DNS only
+    level: container
+    include:
+      - route53
+    exclude: []
+ignore:
+  entities: []
+  kinds:
+    - aws_cloudwatch_*
+  edges: []
+coverage:
+  - scope: aws_secretsmanager_*
+    reason: the read-only role used by CI cannot list secrets
