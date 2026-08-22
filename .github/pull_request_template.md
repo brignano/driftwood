@@ -15,11 +15,11 @@
 
 ## Constraint check
 
-- [ ] No new **required** native dependency — base install still works with npm alone
-- [ ] Anything native is an optional peer dependency behind a `probe()`
+- [ ] No native dependency added — install still works with npm alone (WASM is fine, compiled addons are not)
+- [ ] Any native binary is an opportunistic upgrade behind a `probe()`, never required
 - [ ] Read-only: nothing here mutates infrastructure
 - [ ] No secret values in config — only env var *names*
-- [ ] Tests pass with **and** without Graphviz installed
+- [ ] Tests pass with Graphviz available **and** under `node --jitless` (WebAssembly disabled)
 - [ ] No heuristic identity matching added (cross-source joins stay explicit via `aliases`)
 
 ## Validation

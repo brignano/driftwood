@@ -5,22 +5,28 @@ import { defineRenderer } from './types.js'
 import type { Availability, RenderContext } from './types.js'
 
 /**
- * Graphviz rendering to SVG, with three tiers of availability.
+ * Graphviz rendering to SVG. Graphviz is **bundled, not required**.
  *
- * The original problem this project came from: `mingrammer/diagrams` requires
- * the Graphviz *system binary*, and that cannot be pushed through corporate
- * software approval. The answer is not to give up Graphviz, it's to stop
- * requiring the binary:
+ * The problem this project came from: `mingrammer/diagrams` requires the
+ * Graphviz *system binary*, which cannot clear corporate software approval.
+ * The answer isn't to drop Graphviz, nor to make it an optional extra the user
+ * has to go and find — it's to ship it in a form that needs no system package.
  *
- *   1. native  — the `dot` binary is on PATH. Best output, needs a system package.
- *   2. wasm    — the optional `@hpcc-js/wasm-graphviz` npm package is installed.
- *                Real Graphviz compiled to WebAssembly: same layouts, same DOT
- *                semantics, installed over plain npm with no system package
- *                and no admin rights. This is the enterprise unlock.
- *   3. none    — neither is present, so `--engine auto` falls back to Mermaid.
+ * `@hpcc-js/wasm-graphviz` is real Graphviz compiled to WebAssembly: same DOT
+ * semantics, same layouts, zero transitive dependencies, and the WASM is
+ * inlined into the JS so there is no separate binary to locate. It is a
+ * regular dependency, so `npm install` yields working Graphviz on any machine.
  *
- * Tier 2 is the point. "With Graphviz" and "installable at work" stop being
- * mutually exclusive.
+ * Three tiers remain, in preference order:
+ *
+ *   1. native — the `dot` binary is on PATH. Preferred when present: faster on
+ *      very large graphs, and it honours a site's own Graphviz build/plugins.
+ *   2. wasm   — the bundled WASM build. The default. Works anywhere
+ *      WebAssembly does, with no admin rights and no system package.
+ *   3. none   — WebAssembly is switched off (a hardened or `--jitless`
+ *      runtime), so `--engine auto` falls back to Mermaid.
+ *
+ * Tier 3 is rare but real, which is why the fallback is not vestigial.
  */
 
 export type GraphvizTier = 'native' | 'wasm' | 'none'
@@ -54,24 +60,35 @@ interface WasmGraphviz {
   layout(source: string, format: string, engine: string): string
 }
 
+let wasmCache: WasmGraphviz | undefined
+let wasmAttempted = false
+
 /**
- * Loads the optional WASM package. It is an optional peer dependency, not a
- * hard one, so a machine that cannot install it still gets a working tool.
+ * Loads the bundled WASM build.
+ *
+ * Imported lazily rather than at module load: it is ~800KB, and a Mermaid-only
+ * render should never pay for it. Still wrapped in try/catch because
+ * WebAssembly can be disabled at runtime, and that must degrade to the Mermaid
+ * fallback rather than crash.
  */
 export async function loadWasmGraphviz(): Promise<WasmGraphviz | undefined> {
+  if (wasmAttempted) return wasmCache
+  wasmAttempted = true
   try {
-    // The specifier is held in a variable deliberately: a literal would make
-    // this a hard compile-time dependency, defeating the point of it being
-    // optional. Resolution failure is the expected path, not an error.
-    const specifier = '@hpcc-js/wasm-graphviz'
-    const mod = (await import(/* @vite-ignore */ specifier)) as {
-      Graphviz?: { load(): Promise<WasmGraphviz> }
-    }
-    if (!mod.Graphviz) return undefined
-    return await mod.Graphviz.load()
+    // `lib` is ES2022, which has no WebAssembly types; probe it off globalThis.
+    if (typeof (globalThis as { WebAssembly?: unknown }).WebAssembly === 'undefined') return undefined
+    const { Graphviz } = await import('@hpcc-js/wasm-graphviz')
+    wasmCache = (await Graphviz.load()) as unknown as WasmGraphviz
   } catch {
-    return undefined
+    wasmCache = undefined
   }
+  return wasmCache
+}
+
+/** Test seam: forget any cached WASM instance. */
+export function resetWasmCache(): void {
+  wasmCache = undefined
+  wasmAttempted = false
 }
 
 export async function detectTier(): Promise<GraphvizTier> {
@@ -106,28 +123,28 @@ export async function renderGraphvizSvg(model: Model, ctx: RenderContext = {}): 
     if (gv) return gv.layout(source, 'svg', 'dot')
   }
   throw new Error(
-    'Graphviz is not available. Either install the `dot` binary, or run ' +
-      '`npm install @hpcc-js/wasm-graphviz` for a pure-npm WASM build that needs ' +
-      'no system package. Alternatively use --engine mermaid.',
+    'Graphviz is unavailable because WebAssembly is disabled in this runtime ' +
+      '(for example `node --jitless`). Install the `dot` binary, or use ' +
+      '--engine mermaid, which needs neither.',
   )
 }
 
 export const graphvizRenderer = defineRenderer({
   name: 'graphviz',
-  description: 'Graphviz-rendered SVG (native `dot` binary, or WASM fallback)',
+  description: 'Graphviz-rendered SVG (bundled WASM build, or a native `dot` binary)',
   extension: 'svg',
-  // Highest priority: when Graphviz is genuinely available its layout beats
-  // Mermaid's. When it isn't, `auto` silently drops to the next renderer.
+  // Highest priority: Graphviz layout beats Mermaid's, and it is available by
+  // default. `auto` only drops past it where WebAssembly is switched off.
   priority: 100,
   async probe(): Promise<Availability> {
     const tier = await detectTier()
     if (tier === 'native') return { available: true, via: 'native dot binary' }
-    if (tier === 'wasm') return { available: true, via: '@hpcc-js/wasm-graphviz' }
+    if (tier === 'wasm') return { available: true, via: 'bundled @hpcc-js/wasm-graphviz' }
     return {
       available: false,
       reason:
-        'no `dot` on PATH and @hpcc-js/wasm-graphviz is not installed — ' +
-        'run `npm install @hpcc-js/wasm-graphviz` for a no-system-package build',
+        'WebAssembly is disabled in this runtime, so the bundled Graphviz cannot load — ' +
+        'install the `dot` binary or use --engine mermaid',
     }
   },
   async render(model, ctx) {

@@ -26,7 +26,7 @@ When adding a feature, decide which of those four it is. If it fits none, it pro
 
 Not preferences. Breaking either defeats the project's purpose:
 
-1. **Zero *required* native dependencies.** The base install must work with npm alone. This project exists because `mingrammer/diagrams` needs the Graphviz binary and that can't clear corporate software approval. Graphviz is supported but never required — see the engine tiers below. Required runtime deps are `commander`, `yaml`, `zod`. Anything native must be an optional peer dependency behind a `probe()`.
+1. **No native dependencies, ever.** The whole install must work with npm alone — no compiled addons, no system packages, no post-install build step. This project exists because `mingrammer/diagrams` needs the Graphviz *binary* and that can't clear corporate software approval. Pure JS and WebAssembly are both fine and may be regular dependencies; a native binary may only ever be an *opportunistic upgrade* discovered by `probe()`, never something the tool needs. Runtime deps: `commander`, `yaml`, `zod`, `@hpcc-js/wasm-graphviz`.
 2. **Read-only credentials only.** driftwood observes and reports. It never mutates infrastructure.
 
 ## Extension points
@@ -52,10 +52,12 @@ See `.claude/skills/add-renderer/SKILL.md`. Implement `Renderer` from `src/rende
 
 | Tier | Requirement | Notes |
 |---|---|---|
-| `graphviz` native | `dot` on PATH | Best layout. Needs a system package. |
-| `graphviz` WASM | `npm i @hpcc-js/wasm-graphviz` | Real Graphviz compiled to WASM. Same DOT semantics, no system package, no admin rights. **The enterprise unlock.** |
+| `graphviz` native | `dot` on PATH | Opportunistic upgrade: faster on huge graphs, honours a site's own Graphviz build. Never required. |
+| `graphviz` WASM | **nothing — bundled** | Real Graphviz compiled to WASM, a regular dependency. The default. |
 | `dot` | nothing | Emits DOT *source*. Always available — it's just text. |
-| `mermaid` | nothing | Always available, renders natively in GitHub. The fallback. |
+| `mermaid` | nothing | Always available, renders natively in GitHub. |
+
+The only environment where Graphviz can't run is one with WebAssembly disabled (hardened runtime, `node --jitless`); there `auto` degrades to Mermaid. Rare but real, and asserted in CI — do not delete the fallback as dead code.
 
 `--engine auto` walks by `priority` and takes the first that probes available. An explicitly named engine fails loudly instead of substituting — only `auto` may substitute.
 
@@ -82,7 +84,7 @@ This is honest but limited. Do not claim in docs or output that driftwood resolv
 - Zod schemas are the source of truth for types — derive with `z.infer`, never hand-write a parallel interface.
 - Every provider's output must pass `validateModel`. Dangling edges are a provider bug, not something the validator should tolerate.
 - Tests live in `test/`, named for the module under test. **Cover failure modes, not just happy paths** — the existing suite tests dangling edges, ignore precedence, view filtering dropping half-visible edges, and alias-induced self-loops.
-- Tests must pass whether or not Graphviz is installed. Anything Graphviz-dependent branches on `probe()`.
+- Tests must pass both with Graphviz available (the default) and with WebAssembly disabled. Anything engine-dependent branches on `probe()`.
 
 ## Commands
 
@@ -95,4 +97,4 @@ npx tsx src/cli.ts engines     # what this machine can render with
 npx tsx src/cli.ts providers   # what is registered
 ```
 
-Run `npm run typecheck && npm test` before every commit. CI runs both, plus the drift gate, plus a job that installs the WASM package to prove the Graphviz path.
+Run `npm run typecheck && npm test` before every commit. CI runs both, plus the drift gate, plus one job asserting Graphviz works from a plain install with no `dot` on PATH, and another running `--jitless` to assert the Mermaid fallback.

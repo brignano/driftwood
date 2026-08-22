@@ -44,10 +44,13 @@ Pick a priority by output quality when available. If your renderer needs somethi
 ## Requirements
 
 - **A renderer that needs nothing must report `available: true` unconditionally.** Mermaid and DOT are the floor; at least one renderer must always work or the tool breaks entirely.
-- **Anything native is an optional peer dependency**, imported via a variable specifier so it isn't a compile-time dependency:
+- **Never add a native dependency.** Pure JS and WebAssembly may be regular dependencies (that's how Graphviz ships here). A native binary may only be an *opportunistic upgrade* discovered by `probe()` — the renderer must still work without it.
+- **Import anything heavy lazily**, inside `probe()`/`render()` rather than at module load, and wrap it in try/catch so a runtime that can't load it degrades instead of crashing:
   ```ts
-  const specifier = '@scope/optional-pkg'
-  const mod = await import(/* @vite-ignore */ specifier)
+  try {
+    if (typeof (globalThis as { WebAssembly?: unknown }).WebAssembly === 'undefined') return undefined
+    const { Thing } = await import('@scope/heavy-pkg')
+  } catch { return undefined }
   ```
 - **Use `selectEntities` from `src/render/select.js`** for view scoping so every engine scopes identically.
 - **Drop edges whose endpoints aren't visible** in the current view.
@@ -60,7 +63,7 @@ In `src/render/index.ts`: `renderers.register(myRenderer)`.
 
 ## Test it
 
-Tests must pass **whether or not** your engine's dependency is installed. Branch on `probe()`:
+Tests must pass in every environment your engine might meet — including `node --jitless`, where WebAssembly is unavailable. Branch on `probe()`:
 
 ```ts
 const probe = await renderers.get('d2').probe()

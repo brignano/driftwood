@@ -15,35 +15,48 @@ Two problems that are usually treated separately share one root cause:
 
 Nobody owns the middle. driftwood is the middle.
 
-### Graphviz: optional, never required
+### Graphviz: bundled, not required
 
-`mingrammer/diagrams` requires the Graphviz **system binary**, which is often impossible to get approved inside a corporate environment. driftwood supports Graphviz but never requires it:
+`mingrammer/diagrams` requires the Graphviz **system binary**, which is often impossible to get approved inside a corporate environment. driftwood ships Graphviz instead of requiring it.
+
+`@hpcc-js/wasm-graphviz` is real Graphviz compiled to WebAssembly — same DOT semantics, same layouts, zero transitive dependencies, WASM inlined into the JS. It is a **regular dependency**, so a plain `npm install` gives you working Graphviz on any machine, with no system package and no admin rights.
 
 | Engine | Needs | Output |
 |---|---|---|
-| `graphviz` (native) | `dot` on PATH | SVG, best layout |
-| `graphviz` (WASM) | `npm i @hpcc-js/wasm-graphviz` | SVG — **real Graphviz, no system package, no admin rights** |
+| `graphviz` (native) | `dot` on PATH | SVG. Preferred when present — faster on very large graphs, honours a site's own Graphviz build |
+| `graphviz` (WASM) | **nothing — bundled** | SVG. The default |
 | `dot` | nothing | DOT source (it's just text) |
 | `mermaid` | nothing | Mermaid, renders natively in GitHub |
 
-`--engine auto` picks the best available and silently falls back. The same command and the same config work on a developer laptop with Graphviz and on a locked-down corporate machine without it:
+Out of the box:
 
-```bash
+```
 $ driftwood engines
-graphviz   unavailable  no `dot` on PATH and @hpcc-js/wasm-graphviz is not installed - run `npm install @hpcc-js/wasm-graphviz` for a no-system-package build
+graphviz   available    bundled @hpcc-js/wasm-graphviz
 mermaid    available    built-in
 dot        available    built-in
 
-auto would use: mermaid (built-in)
-
-$ npm install @hpcc-js/wasm-graphviz
-$ driftwood engines
-graphviz   available    @hpcc-js/wasm-graphviz
-...
-auto would use: graphviz (@hpcc-js/wasm-graphviz)
+auto would use: graphviz (bundled @hpcc-js/wasm-graphviz)
 ```
 
-The WASM tier is the important one: it is genuinely Graphviz — same layouts, same DOT semantics — installed over plain npm. "With Graphviz" and "installable at work" stop being mutually exclusive.
+The one environment where Graphviz still can't run is a runtime with WebAssembly switched off — a hardened container, or `node --jitless`. There `auto` degrades to Mermaid rather than failing:
+
+```
+$ node --jitless dist/cli.js engines
+graphviz   unavailable  WebAssembly is disabled in this runtime, so the bundled Graphviz cannot load - install the `dot` binary or use --engine mermaid
+...
+auto would use: mermaid (built-in)
+```
+
+Rare, but real — which is why the fallback isn't vestigial. Both paths are asserted in CI.
+
+For size context, the bundled Graphviz is **smaller than `zod`**, which driftwood already depends on:
+
+| Package | Size | Transitive deps |
+|---|---|---|
+| `zod` | 5.2 MB | — |
+| `@hpcc-js/wasm-graphviz` | 2.1 MB (804 KB runtime) | none |
+| `yaml` | 1.4 MB | — |
 
 ## How it fits together
 
@@ -78,7 +91,7 @@ npm install
 npm run build
 ```
 
-Requires Node 20+. Runtime dependencies are `commander`, `yaml`, and `zod` — all pure JavaScript.
+Requires Node 20+. Runtime dependencies are `commander`, `yaml`, `zod`, and `@hpcc-js/wasm-graphviz` — all pure JavaScript/WebAssembly, no native builds and no system packages.
 
 ## Usage
 
@@ -264,7 +277,7 @@ examples/                a worked AWS example, a drifted copy, and a config
 ## Development
 
 ```bash
-npm test        # 73 tests
+npm test        # 76 tests
 npm run typecheck
 npm run build
 ```
@@ -275,7 +288,7 @@ Built:
 
 - [x] The model, with a schema and a real validator
 - [x] Pluggable provider registry — Terraform (any platform) and Dynatrace built in
-- [x] Pluggable renderer registry — Mermaid, DOT, and Graphviz with automatic fallback
+- [x] Pluggable renderer registry — Graphviz bundled and working out of the box, with Mermaid/DOT fallback
 - [x] Multi-provider merge with provenance, explicit aliases, and conflict reporting
 - [x] Declarative `driftwood.config.yaml` wiring
 - [x] Reconciler with an explicit drift policy, wired as a CI gate

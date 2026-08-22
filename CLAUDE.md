@@ -4,7 +4,7 @@ Read it before changing anything in `src/`.
 
 Two rules that override any local convenience:
 
-1. **Zero *required* native dependencies.** The base install must work with npm alone. Native things are optional peer dependencies behind a `probe()`.
+1. **No native dependencies, ever.** The whole install must work with npm alone. Pure JS and WebAssembly are fine as regular dependencies (Graphviz ships as WASM). A native binary may only be an *opportunistic upgrade* found by `probe()` — never something the tool needs.
 2. **Read-only credentials only.** This tool observes and reports; it never mutates infrastructure.
 
 Before every commit: `npm run typecheck && npm test`.

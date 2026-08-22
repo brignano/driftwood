@@ -9,12 +9,13 @@ npm install
 npm test
 ```
 
-Optionally add Graphviz support without a system package:
+Graphviz works immediately — it ships as a bundled WASM build, so there is nothing to install:
 
 ```bash
-npm install @hpcc-js/wasm-graphviz
-npx tsx src/cli.ts engines   # should now report graphviz available
+npx tsx src/cli.ts engines   # graphviz should report available
 ```
+
+Installing the native `dot` binary is optional; driftwood will prefer it when present, but never needs it.
 
 ## Before every commit
 
@@ -24,7 +25,7 @@ npm run typecheck && npm test
 
 ## The two rules
 
-1. **Zero required native dependencies.** The base install works with npm alone. This project exists because a required Graphviz binary made a tool un-installable inside a corporation. Optional native things live behind a `probe()` as optional peer dependencies.
+1. **No native dependencies, ever.** The install works with npm alone. This project exists because a required Graphviz binary made a tool un-installable inside a corporation. Pure JS and WebAssembly are fine as regular dependencies; a native binary may only be an opportunistic upgrade found by `probe()`.
 2. **Read-only.** driftwood observes and reports. It never mutates infrastructure.
 
 ## Adding things
@@ -38,4 +39,4 @@ Both extension points use the same registry. A third-party plugin registers exac
 
 Cover failure modes, not just happy paths. The existing suite tests dangling edges, ignore-rule precedence, view filtering dropping half-visible edges, and alias-induced self-loops — match that standard.
 
-Tests must pass whether or not Graphviz is installed; branch on `probe()` for anything engine-dependent.
+Tests must pass both with Graphviz available (the default) and under `node --jitless`, where WebAssembly is disabled. Branch on `probe()` for anything engine-dependent.
