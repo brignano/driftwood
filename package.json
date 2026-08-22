@@ -1,0 +1,36 @@
+{
+  "name": "@brignano/driftwood",
+  "version": "0.0.1",
+  "description": "Architecture as code, reconciled with live infrastructure.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "driftwood": "./dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@hpcc-js/wasm-graphviz": "^1.28.0",
+    "commander": "^12.1.0",
+    "yaml": "^2.5.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.2"
+  }
+}
