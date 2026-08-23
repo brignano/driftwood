@@ -283,3 +283,19 @@ describe('dynatrace mapping', () => {
     expect(dynatraceToModel([{ displayName: 'orphan' }], 'aws').entities).toHaveLength(0)
   })
 })
+
+describe('public API surface', () => {
+  it('exposes the classification a third-party renderer is told to use', async () => {
+    // `.claude/skills/add-renderer/SKILL.md` tells plugin authors to classify
+    // with `iconFor`/`familyFor` rather than a second regex table. Someone
+    // installing from npm has only the package entry point, so an unexported
+    // table makes that instruction impossible to follow.
+    const api = await import('../src/index.js')
+    expect(typeof api.iconFor).toBe('function')
+    expect(typeof api.familyFor).toBe('function')
+    expect(typeof api.styleFor).toBe('function')
+    expect(typeof api.iconSvg).toBe('function')
+    expect(api.PALETTE[api.familyFor('aws_s3_bucket')]).toHaveProperty('accent')
+    expect(api.ICONS[api.iconFor('aws_sqs_queue')].body).toBeTruthy()
+  })
+})
