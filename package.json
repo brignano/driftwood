@@ -27,7 +27,7 @@
     "access": "public"
   },
   "bin": {
-    "driftwood": "./dist/cli.js"
+    "driftwood": "dist/cli.js"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
