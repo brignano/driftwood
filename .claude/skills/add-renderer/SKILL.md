@@ -56,6 +56,7 @@ Pick a priority by output quality when available. If your renderer needs somethi
 - **Drop edges whose endpoints aren't visible** in the current view.
 - **Accept `ctx.health` as a render-time overlay.** Never read health from the model — it is never committed there.
 - **Escape labels.** Model text is arbitrary; each format has its own escaping rules.
+- **Classify with `src/render/icons.ts`, never with your own regex table.** `iconFor(kind)` and `familyFor(kind)` decide what an entity *is* and what colour it gets. A queue drawn as a queue in one engine and a cylinder in another means the two pictures no longer describe the same system. If your format can draw vector artwork, `ICONS[key].body` is a 24x24 glyph you can inline; if it can't, map the key to the nearest shape your format has, the way `mermaid.ts` does.
 
 ## Register it
 

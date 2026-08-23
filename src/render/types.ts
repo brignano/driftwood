@@ -5,6 +5,12 @@ export interface RenderContext {
   direction?: 'LR' | 'TD'
   /** Runtime health, applied at render time. Never committed to the model. */
   health?: Record<string, 'healthy' | 'degraded' | 'down'>
+  /**
+   * Draw category icons on nodes. Only renderers that produce final artwork
+   * honour this — Mermaid has no icon primitive, and raw DOT source has no
+   * post-processing step to turn a marker into a picture.
+   */
+  icons?: boolean
 }
 
 export interface Availability {

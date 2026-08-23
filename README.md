@@ -23,8 +23,8 @@ Nobody owns the middle. driftwood is the middle.
 
 | Engine | Needs | Output |
 |---|---|---|
-| `graphviz` (native) | `dot` on PATH | SVG. Preferred when present — faster on very large graphs, honours a site's own Graphviz build |
-| `graphviz` (WASM) | **nothing — bundled** | SVG. The default |
+| `graphviz` (native) | `dot` on PATH | SVG, icons and all. Preferred when present — faster on very large graphs, honours a site's own Graphviz build |
+| `graphviz` (WASM) | **nothing — bundled** | SVG with category icons. The default |
 | `dot` | nothing | DOT source (it's just text) |
 | `mermaid` | nothing | Mermaid, renders natively in GitHub |
 
@@ -71,13 +71,15 @@ flowchart LR
         REC["Reconciler<br/>declared vs observed"]
     end
     subgraph Renderers["Renderers — present"]
-        MMD["Mermaid"]
+        GV["Graphviz SVG"]
+        MMD["Mermaid · DOT"]
         LATER["2D live · 3D<br/>(not yet)"]
     end
     TF --> REC
     SOON -.-> REC
     MODEL --> REC
     REC -->|"divergence"| MODEL
+    MODEL --> GV
     MODEL --> MMD
     MODEL -.-> LATER
 ```
@@ -98,11 +100,13 @@ Requires Node 20+. Runtime dependencies are `commander`, `yaml`, `zod`, and `@hp
 ### Import a model from Terraform state
 
 ```bash
-npx tsx src/cli.ts import terraform examples/aws-config.tfstate.json \
-  --name aws-config -o examples/architecture.yaml
+npx tsx src/cli.ts import terraform examples/orders-platform.tfstate.json \
+  --name orders-platform -o examples/architecture.yaml
 ```
 
-Entity ids are Terraform addresses (`aws_s3_bucket.emails`). That's deliberate: the address is stable across plans, readable in a diff, and sidesteps the identity-resolution problem that kills CMDBs. Edges come from Terraform's own `dependencies`.
+Entity ids are Terraform addresses (`aws_s3_bucket.assets`). That's deliberate: the address is stable across plans, readable in a diff, and sidesteps the identity-resolution problem that kills CMDBs. Edges come from Terraform's own `dependencies`.
+
+The worked example in `examples/` is a fictional e-commerce platform — CloudFront and Route 53 at the edge, an ALB in front of two ECS services, Postgres, Redis, DynamoDB and S3 behind them, and an SQS/SNS order pipeline with a Lambda worker. 45 resources: enough that the view mechanism is doing real work rather than decorating a diagram that fits on a page anyway.
 
 ### Validate
 
@@ -115,54 +119,88 @@ Catches schema errors, duplicate ids, edges pointing at entities that don't exis
 ### Render
 
 ```bash
-npx tsx src/cli.ts render examples/architecture.yaml --view email
+npx tsx src/cli.ts render examples/architecture.yaml --view app -o docs/app.svg
 ```
+
+![The app view: an ALB listener and target group feeding two ECS services and their task definitions](docs/app.svg)
+
+Nodes are drawn with a category icon, the entity name, and its `kind` underneath. The icons are **drawn in this repo and chosen by category** — database, queue, load balancer — not by vendor: no icon pack to install, nothing to license, and one glyph that fits an RDS instance, a Cloud SQL instance and an on-prem Postgres alike. Colour groups the categories into families (edge, compute, data, messaging, security), so a diagram reads as a few zones instead of thirty unrelated boxes. Use `--no-icons` for plain boxes.
+
+The icons are inlined into the SVG rather than handed to Graphviz as `image=` attributes, because the native `dot` binary resolves those as filesystem paths — a `data:` URI would work on the WASM tier and break on the native one. Post-processing the SVG means both tiers draw the same picture, and the result stays self-contained — no external references, no base64 bloat.
+
+The `async` view through Mermaid, which renders natively in a pull request:
 
 ```mermaid
 flowchart LR
     subgraph n_lambda["lambda"]
-        n_aws_lambda_function_email_forwarder["email-forwarder<br/>aws_lambda_function"]
+        n_aws_lambda_event_source_mapping_orders[/"orders<br/>aws_lambda_event_source_mapping"/]
+        n_aws_lambda_function_order_worker["shop-order-worker<br/>aws_lambda_function"]
     end
-    subgraph n_s3["s3"]
-        n_aws_s3_bucket_emails[("brignano.io-emails<br/>aws_s3_bucket")]
+    subgraph n_sns["sns"]
+        n_aws_sns_topic_subscription_orders[/"orders<br/>aws_sns_topic_subscription"/]
+        n_aws_sns_topic_order_events[/"shop-order-events<br/>aws_sns_topic"/]
     end
-    subgraph n_ses["ses"]
-        n_aws_ses_receipt_rule_set_main["main<br/>aws_ses_receipt_rule_set"]
-        n_aws_ses_receipt_rule_archive["archive-hi<br/>aws_ses_receipt_rule"]
-        n_aws_ses_receipt_rule_forward["forward-hi<br/>aws_ses_receipt_rule"]
-        n_aws_ses_receipt_rule_noreply["bounce-noreply<br/>aws_ses_receipt_rule"]
+    subgraph n_sqs["sqs"]
+        n_aws_sqs_queue_orders[/"shop-orders<br/>aws_sqs_queue"/]
+        n_aws_sqs_queue_orders_dlq[/"shop-orders-dlq<br/>aws_sqs_queue"/]
     end
-    n_aws_lambda_function_email_forwarder --> n_aws_s3_bucket_emails
-    n_aws_ses_receipt_rule_archive --> n_aws_s3_bucket_emails
-    n_aws_ses_receipt_rule_archive --> n_aws_ses_receipt_rule_set_main
-    n_aws_ses_receipt_rule_forward --> n_aws_lambda_function_email_forwarder
-    n_aws_ses_receipt_rule_forward --> n_aws_ses_receipt_rule_set_main
-    n_aws_ses_receipt_rule_noreply --> n_aws_ses_receipt_rule_set_main
+    n_aws_lambda_event_source_mapping_orders --> n_aws_lambda_function_order_worker
+    n_aws_lambda_event_source_mapping_orders --> n_aws_sqs_queue_orders
+    n_aws_lambda_function_order_worker --> n_aws_sqs_queue_orders
+    n_aws_sns_topic_subscription_orders --> n_aws_sns_topic_order_events
+    n_aws_sns_topic_subscription_orders --> n_aws_sqs_queue_orders
+    n_aws_sqs_queue_orders --> n_aws_sqs_queue_orders_dlq
+    class n_aws_lambda_event_source_mapping_orders f_messaging;
+    class n_aws_lambda_function_order_worker f_compute;
+    class n_aws_sns_topic_subscription_orders f_messaging;
+    class n_aws_sns_topic_order_events f_messaging;
+    class n_aws_sqs_queue_orders f_messaging;
+    class n_aws_sqs_queue_orders_dlq f_messaging;
+    classDef f_compute fill:#fffbeb,stroke:#d97706,color:#0f172a;
+    classDef f_messaging fill:#f5f3ff,stroke:#7c3aed,color:#0f172a;
 ```
 
-**Views exist from v1, not as a later optimization.** Flat Mermaid becomes unreadable past roughly 150 nodes, and any real enterprise graph blows through that immediately. A view is a scoped slice matching entity ids or groups, with a trailing `*` wildcard.
+Mermaid has no icon primitive, so it maps the *same* categorisation onto shapes and colours — a queue must not be a queue in one engine and a cylinder in the other, or the two pictures stop describing the same system.
+
+**Views exist from v1, not as a later optimization.** Flat Mermaid becomes unreadable past roughly 150 nodes, and any real enterprise graph blows through that immediately. A view is a scoped slice matching entity ids or groups, with a trailing `*` wildcard. The example model ships six — `context`, `edge`, `app`, `data`, `async`, `network` — and even at 45 entities the difference between a view and the whole graph is the difference between a diagram and a wall.
 
 ### Reconcile — the point of the whole thing
 
 ```bash
 npx tsx src/cli.ts reconcile examples/architecture.yaml \
-  --terraform examples/aws-config.drifted.tfstate.json
+  --terraform examples/orders-platform.drifted.tfstate.json
 ```
+
+Two resources created by hand during an incident, one bucket deleted, one database renamed:
 
 ```markdown
 ## Architecture drift detected
 
 ### Present in infrastructure, missing from the model (2)
-- `aws_cloudfront_distribution.cdn` - aws_cloudfront_distribution (d123.cloudfront.net)
-- `aws_sqs_queue.dlq` - aws_sqs_queue (email-forwarder-dlq)
+
+- `aws_elasticache_replication_group.sessions_failover` - aws_elasticache_replication_group (shop-sessions-ha)
+- `aws_sqs_queue.payments` - aws_sqs_queue (shop-payments)
 
 ### Declared in the model, not found in infrastructure (1)
-- `aws_ses_receipt_rule.noreply` - aws_ses_receipt_rule (bounce-noreply)
+
+- `aws_s3_bucket.uploads` - aws_s3_bucket (shop-example-com-uploads)
+
+### Changed (1)
+
+| Entity | Field | Declared | Observed |
+|---|---|---|---|
+| `aws_db_instance.orders` | name | shop-orders-prod | shop-orders-prod-v2 |
 
 ### Relationships
-- **added** `aws_cloudfront_distribution.cdn` -> `aws_s3_bucket.emails`
-- **added** `aws_sqs_queue.dlq` -> `aws_lambda_function.email_forwarder`
-- **removed** `aws_ses_receipt_rule.noreply` -> `aws_ses_receipt_rule_set.main`
+
+- **added** `aws_elasticache_replication_group.sessions_failover` -> `aws_security_group.data`
+- **added** `aws_elasticache_replication_group.sessions_failover` -> `aws_subnet.private_a`
+- **added** `aws_sqs_queue.payments` -> `aws_kms_key.data`
+- **removed** `aws_iam_role_policy.order_worker` -> `aws_s3_bucket.uploads`
+- **removed** `aws_lambda_function.order_worker` -> `aws_s3_bucket.uploads`
+- **removed** `aws_s3_bucket.uploads` -> `aws_kms_key.data`
+
+_Ignored by policy: 1 entities, 0 edges._
 ```
 
 Exits **1** on drift and **0** when clean, so it works directly as a CI gate. Output is markdown because its destination is a pull request body.
@@ -264,20 +302,22 @@ src/
   providers/dynatrace.ts runtime — Smartscape topology, read-only
   render/types.ts        the renderer extension point (probe + render)
   render/select.ts       shared view scoping
+  render/icons.ts        category icons, the kind -> icon/colour table, SVG injection
   render/mermaid.ts      always available
   render/dot.ts          DOT source, always available
   render/graphviz.ts     SVG via native dot or WASM, with tier detection
   reconcile/index.ts     declared vs observed -> drift report
   config.ts              driftwood.config.yaml
   cli.ts                 validate · render · engines · providers · import · reconcile
-examples/                a worked AWS example, a drifted copy, and a config
+examples/                a worked 45-resource AWS platform, a drifted copy, and a config
+docs/                    rendered output committed for the README
 .claude/skills/          add-provider and add-renderer walkthroughs for agents
 ```
 
 ## Development
 
 ```bash
-npm test        # 76 tests
+npm test        # 98 tests
 npm run typecheck
 npm run build
 ```
@@ -289,6 +329,7 @@ Built:
 - [x] The model, with a schema and a real validator
 - [x] Pluggable provider registry — Terraform (any platform) and Dynatrace built in
 - [x] Pluggable renderer registry — Graphviz bundled and working out of the box, with Mermaid/DOT fallback
+- [x] Category icons and a family palette, shared by every engine
 - [x] Multi-provider merge with provenance, explicit aliases, and conflict reporting
 - [x] Declarative `driftwood.config.yaml` wiring
 - [x] Reconciler with an explicit drift policy, wired as a CI gate

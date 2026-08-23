@@ -1,149 +1,606 @@
 version: 1
-name: aws-config
+name: orders-platform
 entities:
-  - id: aws_cloudwatch_log_group.forwarder
-    kind: aws_cloudwatch_log_group
-    name: /aws/lambda/email-forwarder
-    group: cloudwatch
-    provider: aws
+  - id: aws_acm_certificate.edge
+    kind: aws_acm_certificate
+    name: shop.example.com
+    group: acm
+    platform: aws
+    source: terraform
     level: container
-  - id: aws_iam_role_policy.lambda_s3_read
+  - id: aws_cloudfront_distribution.cdn
+    kind: aws_cloudfront_distribution
+    name: d29fexample.cloudfront.net
+    group: cloudfront
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_cloudwatch_log_group.order_worker
+    kind: aws_cloudwatch_log_group
+    name: /aws/lambda/shop-order-worker
+    group: cloudwatch
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_cloudwatch_log_group.orders_api
+    kind: aws_cloudwatch_log_group
+    name: /ecs/shop-orders-api
+    group: cloudwatch
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_cloudwatch_log_group.storefront
+    kind: aws_cloudwatch_log_group
+    name: /ecs/shop-storefront
+    group: cloudwatch
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_cloudwatch_metric_alarm.dlq_depth
+    kind: aws_cloudwatch_metric_alarm
+    name: shop-orders-dlq-not-empty
+    group: cloudwatch
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_db_instance.orders
+    kind: aws_db_instance
+    name: shop-orders-prod
+    group: db
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_db_subnet_group.orders
+    kind: aws_db_subnet_group
+    name: shop-prod-db
+    group: db
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_dynamodb_table.carts
+    kind: aws_dynamodb_table
+    name: shop-carts
+    group: dynamodb
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_ecs_cluster.main
+    kind: aws_ecs_cluster
+    name: shop-prod
+    group: ecs
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_ecs_service.orders_api
+    kind: aws_ecs_service
+    name: shop-orders-api
+    group: ecs
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_ecs_service.storefront
+    kind: aws_ecs_service
+    name: shop-storefront
+    group: ecs
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_ecs_task_definition.orders_api
+    kind: aws_ecs_task_definition
+    name: shop-orders-api
+    group: ecs
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_ecs_task_definition.storefront
+    kind: aws_ecs_task_definition
+    name: shop-storefront
+    group: ecs
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_elasticache_cluster.sessions
+    kind: aws_elasticache_cluster
+    name: shop-sessions
+    group: elasticache
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_iam_role_policy.order_worker
     kind: aws_iam_role_policy
-    name: email-forwarder-s3-read
+    name: shop-order-worker-access
     group: iam
-    provider: aws
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_iam_role_policy.orders_api
+    kind: aws_iam_role_policy
+    name: shop-orders-api-publish
+    group: iam
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_iam_role.ecs_task_execution
+    kind: aws_iam_role
+    name: shop-ecs-task-execution
+    group: iam
+    platform: aws
+    source: terraform
     level: container
   - id: aws_iam_role.lambda_exec
     kind: aws_iam_role
-    name: email-forwarder-exec
+    name: shop-order-worker-exec
     group: iam
-    provider: aws
+    platform: aws
+    source: terraform
     level: container
-  - id: aws_lambda_function.email_forwarder
-    kind: aws_lambda_function
-    name: email-forwarder
+  - id: aws_iam_role.orders_api
+    kind: aws_iam_role
+    name: shop-orders-api-task
+    group: iam
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_kms_key.data
+    kind: aws_kms_key
+    name: shop-prod-data
+    group: kms
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_lambda_event_source_mapping.orders
+    kind: aws_lambda_event_source_mapping
+    name: orders
     group: lambda
-    provider: aws
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_lambda_function.order_worker
+    kind: aws_lambda_function
+    name: shop-order-worker
+    group: lambda
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_lb_listener.https
+    kind: aws_lb_listener
+    name: https
+    group: lb
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_lb_target_group.storefront
+    kind: aws_lb_target_group
+    name: shop-prod-storefront
+    group: lb
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_lb.api
+    kind: aws_lb
+    name: shop-prod-alb
+    group: lb
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_nat_gateway.main
+    kind: aws_nat_gateway
+    name: shop-prod-nat
+    group: nat
+    platform: aws
+    source: terraform
     level: container
   - id: aws_route53_record.apex
     kind: aws_route53_record
-    name: brignano.io
+    name: shop.example.com
     group: route53
-    provider: aws
+    platform: aws
+    source: terraform
     level: container
-  - id: aws_route53_record.mx
+  - id: aws_route53_record.api
     kind: aws_route53_record
-    name: brignano.io
+    name: api.shop.example.com
     group: route53
-    provider: aws
-    level: container
-  - id: aws_route53_record.www
-    kind: aws_route53_record
-    name: www.brignano.io
-    group: route53
-    provider: aws
+    platform: aws
+    source: terraform
     level: container
   - id: aws_route53_zone.primary
     kind: aws_route53_zone
-    name: brignano.io
+    name: shop.example.com
     group: route53
-    provider: aws
+    platform: aws
+    source: terraform
     level: container
-  - id: aws_s3_bucket.emails
+  - id: aws_s3_bucket.assets
     kind: aws_s3_bucket
-    name: brignano.io-emails
+    name: shop-example-com-assets
     group: s3
-    provider: aws
+    platform: aws
+    source: terraform
     level: container
-  - id: aws_ses_receipt_rule_set.main
-    kind: aws_ses_receipt_rule_set
-    name: main
-    group: ses
-    provider: aws
+  - id: aws_s3_bucket.uploads
+    kind: aws_s3_bucket
+    name: shop-example-com-uploads
+    group: s3
+    platform: aws
+    source: terraform
     level: container
-  - id: aws_ses_receipt_rule.archive
-    kind: aws_ses_receipt_rule
-    name: archive-hi
-    group: ses
-    provider: aws
+  - id: aws_secretsmanager_secret.db_password
+    kind: aws_secretsmanager_secret
+    name: shop/prod/orders-db
+    group: secretsmanager
+    platform: aws
+    source: terraform
     level: container
-  - id: aws_ses_receipt_rule.forward
-    kind: aws_ses_receipt_rule
-    name: forward-hi
-    group: ses
-    provider: aws
+  - id: aws_security_group.app
+    kind: aws_security_group
+    name: shop-prod-app
+    group: security
+    platform: aws
+    source: terraform
     level: container
-  - id: aws_ses_receipt_rule.noreply
-    kind: aws_ses_receipt_rule
-    name: bounce-noreply
-    group: ses
-    provider: aws
+  - id: aws_security_group.data
+    kind: aws_security_group
+    name: shop-prod-data
+    group: security
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_security_group.edge
+    kind: aws_security_group
+    name: shop-prod-alb
+    group: security
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_sns_topic_subscription.orders
+    kind: aws_sns_topic_subscription
+    name: orders
+    group: sns
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_sns_topic.order_events
+    kind: aws_sns_topic
+    name: shop-order-events
+    group: sns
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_sqs_queue.orders
+    kind: aws_sqs_queue
+    name: shop-orders
+    group: sqs
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_sqs_queue.orders_dlq
+    kind: aws_sqs_queue
+    name: shop-orders-dlq
+    group: sqs
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_subnet.private_a
+    kind: aws_subnet
+    name: shop-prod-private-a
+    group: subnet
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_subnet.private_b
+    kind: aws_subnet
+    name: shop-prod-private-b
+    group: subnet
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_subnet.public_a
+    kind: aws_subnet
+    name: shop-prod-public-a
+    group: subnet
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_vpc.main
+    kind: aws_vpc
+    name: shop-prod
+    group: vpc
+    platform: aws
+    source: terraform
+    level: container
+  - id: aws_wafv2_web_acl.edge
+    kind: aws_wafv2_web_acl
+    name: shop-edge-acl
+    group: wafv2
+    platform: aws
+    source: terraform
     level: container
 edges:
-  - from: aws_cloudwatch_log_group.forwarder
-    to: aws_lambda_function.email_forwarder
+  - from: aws_acm_certificate.edge
+    to: aws_route53_zone.primary
     kind: depends-on
-  - from: aws_iam_role_policy.lambda_s3_read
+  - from: aws_cloudfront_distribution.cdn
+    to: aws_acm_certificate.edge
+    kind: depends-on
+  - from: aws_cloudfront_distribution.cdn
+    to: aws_s3_bucket.assets
+    kind: depends-on
+  - from: aws_cloudfront_distribution.cdn
+    to: aws_wafv2_web_acl.edge
+    kind: depends-on
+  - from: aws_cloudwatch_metric_alarm.dlq_depth
+    to: aws_sns_topic.order_events
+    kind: depends-on
+  - from: aws_cloudwatch_metric_alarm.dlq_depth
+    to: aws_sqs_queue.orders_dlq
+    kind: depends-on
+  - from: aws_db_instance.orders
+    to: aws_db_subnet_group.orders
+    kind: depends-on
+  - from: aws_db_instance.orders
+    to: aws_kms_key.data
+    kind: depends-on
+  - from: aws_db_instance.orders
+    to: aws_secretsmanager_secret.db_password
+    kind: depends-on
+  - from: aws_db_instance.orders
+    to: aws_security_group.data
+    kind: depends-on
+  - from: aws_db_subnet_group.orders
+    to: aws_subnet.private_a
+    kind: depends-on
+  - from: aws_db_subnet_group.orders
+    to: aws_subnet.private_b
+    kind: depends-on
+  - from: aws_dynamodb_table.carts
+    to: aws_kms_key.data
+    kind: depends-on
+  - from: aws_ecs_service.orders_api
+    to: aws_ecs_cluster.main
+    kind: depends-on
+  - from: aws_ecs_service.orders_api
+    to: aws_ecs_task_definition.orders_api
+    kind: depends-on
+  - from: aws_ecs_service.orders_api
+    to: aws_security_group.app
+    kind: depends-on
+  - from: aws_ecs_service.orders_api
+    to: aws_subnet.private_a
+    kind: depends-on
+  - from: aws_ecs_service.orders_api
+    to: aws_subnet.private_b
+    kind: depends-on
+  - from: aws_ecs_service.storefront
+    to: aws_ecs_cluster.main
+    kind: depends-on
+  - from: aws_ecs_service.storefront
+    to: aws_ecs_task_definition.storefront
+    kind: depends-on
+  - from: aws_ecs_service.storefront
+    to: aws_lb_target_group.storefront
+    kind: depends-on
+  - from: aws_ecs_service.storefront
+    to: aws_security_group.app
+    kind: depends-on
+  - from: aws_ecs_service.storefront
+    to: aws_subnet.private_a
+    kind: depends-on
+  - from: aws_ecs_service.storefront
+    to: aws_subnet.private_b
+    kind: depends-on
+  - from: aws_ecs_task_definition.orders_api
+    to: aws_cloudwatch_log_group.orders_api
+    kind: depends-on
+  - from: aws_ecs_task_definition.orders_api
+    to: aws_iam_role.ecs_task_execution
+    kind: depends-on
+  - from: aws_ecs_task_definition.orders_api
+    to: aws_iam_role.orders_api
+    kind: depends-on
+  - from: aws_ecs_task_definition.storefront
+    to: aws_cloudwatch_log_group.storefront
+    kind: depends-on
+  - from: aws_ecs_task_definition.storefront
+    to: aws_iam_role.ecs_task_execution
+    kind: depends-on
+  - from: aws_elasticache_cluster.sessions
+    to: aws_security_group.data
+    kind: depends-on
+  - from: aws_elasticache_cluster.sessions
+    to: aws_subnet.private_a
+    kind: depends-on
+  - from: aws_iam_role_policy.order_worker
+    to: aws_dynamodb_table.carts
+    kind: depends-on
+  - from: aws_iam_role_policy.order_worker
     to: aws_iam_role.lambda_exec
     kind: depends-on
-  - from: aws_iam_role_policy.lambda_s3_read
-    to: aws_s3_bucket.emails
+  - from: aws_iam_role_policy.order_worker
+    to: aws_s3_bucket.uploads
     kind: depends-on
-  - from: aws_lambda_function.email_forwarder
+  - from: aws_iam_role_policy.order_worker
+    to: aws_sqs_queue.orders
+    kind: depends-on
+  - from: aws_iam_role_policy.orders_api
+    to: aws_iam_role.orders_api
+    kind: depends-on
+  - from: aws_iam_role_policy.orders_api
+    to: aws_secretsmanager_secret.db_password
+    kind: depends-on
+  - from: aws_iam_role_policy.orders_api
+    to: aws_sns_topic.order_events
+    kind: depends-on
+  - from: aws_lambda_event_source_mapping.orders
+    to: aws_lambda_function.order_worker
+    kind: depends-on
+  - from: aws_lambda_event_source_mapping.orders
+    to: aws_sqs_queue.orders
+    kind: depends-on
+  - from: aws_lambda_function.order_worker
+    to: aws_cloudwatch_log_group.order_worker
+    kind: depends-on
+  - from: aws_lambda_function.order_worker
+    to: aws_dynamodb_table.carts
+    kind: depends-on
+  - from: aws_lambda_function.order_worker
     to: aws_iam_role.lambda_exec
     kind: depends-on
-  - from: aws_lambda_function.email_forwarder
-    to: aws_s3_bucket.emails
+  - from: aws_lambda_function.order_worker
+    to: aws_s3_bucket.uploads
+    kind: depends-on
+  - from: aws_lambda_function.order_worker
+    to: aws_sqs_queue.orders
+    kind: depends-on
+  - from: aws_lb_listener.https
+    to: aws_acm_certificate.edge
+    kind: depends-on
+  - from: aws_lb_listener.https
+    to: aws_lb_target_group.storefront
+    kind: depends-on
+  - from: aws_lb_listener.https
+    to: aws_lb.api
+    kind: depends-on
+  - from: aws_lb_target_group.storefront
+    to: aws_vpc.main
+    kind: depends-on
+  - from: aws_lb.api
+    to: aws_security_group.edge
+    kind: depends-on
+  - from: aws_lb.api
+    to: aws_subnet.public_a
+    kind: depends-on
+  - from: aws_nat_gateway.main
+    to: aws_subnet.public_a
+    kind: depends-on
+  - from: aws_route53_record.apex
+    to: aws_cloudfront_distribution.cdn
     kind: depends-on
   - from: aws_route53_record.apex
     to: aws_route53_zone.primary
     kind: depends-on
-  - from: aws_route53_record.mx
+  - from: aws_route53_record.api
+    to: aws_lb.api
+    kind: depends-on
+  - from: aws_route53_record.api
     to: aws_route53_zone.primary
     kind: depends-on
-  - from: aws_route53_record.www
-    to: aws_route53_zone.primary
+  - from: aws_s3_bucket.uploads
+    to: aws_kms_key.data
     kind: depends-on
-  - from: aws_ses_receipt_rule.archive
-    to: aws_s3_bucket.emails
+  - from: aws_secretsmanager_secret.db_password
+    to: aws_kms_key.data
     kind: depends-on
-  - from: aws_ses_receipt_rule.archive
-    to: aws_ses_receipt_rule_set.main
+  - from: aws_security_group.app
+    to: aws_vpc.main
     kind: depends-on
-  - from: aws_ses_receipt_rule.forward
-    to: aws_lambda_function.email_forwarder
+  - from: aws_security_group.data
+    to: aws_vpc.main
     kind: depends-on
-  - from: aws_ses_receipt_rule.forward
-    to: aws_ses_receipt_rule_set.main
+  - from: aws_security_group.edge
+    to: aws_vpc.main
     kind: depends-on
-  - from: aws_ses_receipt_rule.noreply
-    to: aws_ses_receipt_rule_set.main
+  - from: aws_sns_topic_subscription.orders
+    to: aws_sns_topic.order_events
     kind: depends-on
+  - from: aws_sns_topic_subscription.orders
+    to: aws_sqs_queue.orders
+    kind: depends-on
+  - from: aws_sns_topic.order_events
+    to: aws_kms_key.data
+    kind: depends-on
+  - from: aws_sqs_queue.orders
+    to: aws_kms_key.data
+    kind: depends-on
+  - from: aws_sqs_queue.orders
+    to: aws_sqs_queue.orders_dlq
+    kind: depends-on
+  - from: aws_subnet.private_a
+    to: aws_vpc.main
+    kind: depends-on
+  - from: aws_subnet.private_b
+    to: aws_vpc.main
+    kind: depends-on
+  - from: aws_subnet.public_a
+    to: aws_vpc.main
+    kind: depends-on
+
+# Views are a v1 feature, not a later optimization: 45 entities is already too
+# many for one readable page, and a real estate is an order of magnitude worse.
+# A view scopes by entity id or group, with a trailing `*` wildcard.
 views:
   - id: context
-    title: Everything, one page
+    title: The whole platform, one page
     level: context
     include: []
-    exclude: []
-  - id: email
-    title: Inbound email path
-    level: container
-    include:
-      - ses
-      - s3
-      - lambda
-    exclude: []
-  - id: dns
-    title: DNS only
+    exclude:
+      - aws_iam_*
+      - aws_cloudwatch_*
+  - id: edge
+    title: Edge — DNS, CDN, WAF and the load balancer
     level: container
     include:
       - route53
+      - cloudfront
+      - acm
+      - wafv2
+      - lb
     exclude: []
+  - id: app
+    title: Request path — load balancer to containers
+    level: container
+    include:
+      - lb
+      - ecs
+    exclude: []
+  - id: data
+    title: Stateful services
+    level: container
+    include:
+      - db
+      - dynamodb
+      - elasticache
+      - s3
+    exclude: []
+  - id: async
+    title: Order processing — queue, topic and worker
+    level: container
+    include:
+      - sqs
+      - sns
+      - lambda
+    exclude: []
+  - id: network
+    title: VPC, subnets and security groups
+    level: container
+    include:
+      - vpc
+      - subnet
+      - security
+      - nat
+    exclude: []
+
+# Intentional divergence, reviewed like code. Log groups are created and
+# retired by the application teams' own pipelines, so their churn is not drift
+# anyone needs to see.
 ignore:
   entities: []
   kinds:
-    - aws_cloudwatch_*
+    - aws_cloudwatch_log_group
   edges: []
+
+# Cross-source identity is explicit, never guessed. Dynatrace calls the orders
+# API `SERVICE-4A1B2C3D4E5F6789`; nothing in either payload proves it is the
+# same thing as the ECS service, so the mapping is written down and reviewed.
+aliases:
+  SERVICE-4A1B2C3D4E5F6789: aws_ecs_service.orders_api
+  SERVICE-9F8E7D6C5B4A3210: aws_ecs_service.storefront
+
+# Declared blind spots. Read-only credentials never see everything, and
+# "unknown" must never be reported as "absent".
 coverage:
   - scope: aws_secretsmanager_*
-    reason: the read-only role used by CI cannot list secrets
+    reason: the read-only role used by CI can list secret names but not versions
+  - scope: aws_route53_record.*
+    reason: records managed by the marketing team's own zone delegation are invisible here
+

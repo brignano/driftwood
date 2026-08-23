@@ -1,4 +1,6 @@
 import type { Entity, Model } from '../model/schema.js'
+import { PALETTE, familyFor, iconFor } from './icons.js'
+import type { Family, IconKey } from './icons.js'
 import { selectEntities } from './select.js'
 import { defineRenderer } from './types.js'
 import type { RenderContext } from './types.js'
@@ -19,38 +21,36 @@ function escapeLabel(text: string): string {
   return text.replace(/"/g, '&quot;').replace(/\n/g, '<br/>')
 }
 
-type ShapeFamily = 'storage' | 'messaging' | 'network' | 'identity' | 'compute'
-
-const KIND_PATTERNS: Array<[RegExp, ShapeFamily]> = [
-  [/(s3|bucket|rds|dynamodb|db|database|efs|volume|storage)/i, 'storage'],
-  [/(sqs|sns|queue|topic|kinesis|kafka|eventbridge)/i, 'messaging'],
-  [/(route53|dns|cloudfront|vpc|subnet|lb|gateway|cdn|zone|record)/i, 'network'],
-  [/(iam|role|policy|secret|kms|cert|acm|auth)/i, 'identity'],
-  [/(lambda|ec2|ecs|function|instance|service|container|app)/i, 'compute'],
-]
-
-function shapeFor(kind: string): ShapeFamily {
-  for (const [pattern, family] of KIND_PATTERNS) {
-    if (pattern.test(kind)) return family
-  }
-  return 'compute'
+/**
+ * Mermaid has no icon primitive, so the same categorisation that picks an icon
+ * for the Graphviz renderer picks a shape and a colour here. Sharing it is the
+ * point: a queue must not be a cylinder in one engine and a parallelogram in
+ * the other, or the two pictures stop describing the same system.
+ */
+const SHAPES: Partial<Record<IconKey, (id: string, label: string) => string>> = {
+  database: (id, l) => `${id}[("${l}")]`,
+  storage: (id, l) => `${id}[("${l}")]`,
+  cache: (id, l) => `${id}[("${l}")]`,
+  queue: (id, l) => `${id}[/"${l}"/]`,
+  topic: (id, l) => `${id}[/"${l}"/]`,
+  events: (id, l) => `${id}[/"${l}"/]`,
+  email: (id, l) => `${id}[/"${l}"/]`,
+  dns: (id, l) => `${id}("${l}")`,
+  cdn: (id, l) => `${id}("${l}")`,
+  network: (id, l) => `${id}("${l}")`,
+  loadbalancer: (id, l) => `${id}("${l}")`,
+  api: (id, l) => `${id}("${l}")`,
+  identity: (id, l) => `${id}{{"${l}"}}`,
+  secret: (id, l) => `${id}{{"${l}"}}`,
+  certificate: (id, l) => `${id}{{"${l}"}}`,
+  firewall: (id, l) => `${id}{{"${l}"}}`,
 }
 
 function renderNode(e: Entity): string {
   const label = escapeLabel(`${e.name ?? e.id}\n${e.kind}`)
   const id = nodeId(e.id)
-  switch (shapeFor(e.kind)) {
-    case 'storage':
-      return `${id}[("${label}")]`
-    case 'messaging':
-      return `${id}[/"${label}"/]`
-    case 'network':
-      return `${id}("${label}")`
-    case 'identity':
-      return `${id}{{"${label}"}}`
-    default:
-      return `${id}["${label}"]`
-  }
+  const shape = SHAPES[iconFor(e.kind)]
+  return shape ? shape(id, label) : `${id}["${label}"]`
 }
 
 export type RenderOptions = RenderContext
@@ -90,6 +90,19 @@ export function renderMermaid(model: Model, opts: RenderOptions = {}): string {
     if (!visible.has(edge.from) || !visible.has(edge.to)) continue
     const label = edge.label ? `|"${escapeLabel(edge.label)}"|` : ''
     lines.push(`    ${nodeId(edge.from)} -->${label} ${nodeId(edge.to)}`)
+  }
+
+  // Family colours, matching the Graphviz renderer's palette. Emitted before
+  // the health overlay so that health, being the more urgent fact, wins.
+  const families = new Set<Family>()
+  for (const e of entities) {
+    const family = familyFor(e.kind)
+    families.add(family)
+    lines.push(`    class ${nodeId(e.id)} f_${family};`)
+  }
+  for (const family of [...families].sort()) {
+    const { accent, tint } = PALETTE[family]
+    lines.push(`    classDef f_${family} fill:${tint},stroke:${accent},color:#0f172a;`)
   }
 
   if (opts.health) {

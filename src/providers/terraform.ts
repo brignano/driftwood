@@ -65,7 +65,17 @@ function groupFor(type: string | undefined): string | undefined {
  * resource's local name.
  */
 function displayName(r: TfResource, attrs: Record<string, unknown> | undefined): string {
-  const candidates = ['name', 'bucket', 'domain_name', 'function_name', 'identifier']
+  const candidates = [
+    'name',
+    'bucket',
+    'domain_name',
+    'function_name',
+    'identifier',
+    'cluster_id',
+    'replication_group_id',
+    'alarm_name',
+    'family',
+  ]
   for (const key of candidates) {
     const v = attrs?.[key]
     if (typeof v === 'string' && v.length > 0) return v

@@ -1,0 +1,791 @@
+{
+  "version": 4,
+  "terraform_version": "1.9.5",
+  "serial": 118,
+  "lineage": "0f0f0f0f-aaaa-bbbb-cccc-000000000000",
+  "outputs": {},
+  "resources": [
+    {
+      "mode": "data",
+      "type": "aws_caller_identity",
+      "name": "current",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "account_id": "000000000000"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "data",
+      "type": "aws_region",
+      "name": "current",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "us-east-1"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_route53_zone",
+      "name": "primary",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop.example.com",
+            "zone_id": "Z04FAKEZONEID1"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_route53_record",
+      "name": "apex",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop.example.com",
+            "type": "A"
+          },
+          "dependencies": [
+            "aws_route53_zone.primary",
+            "aws_cloudfront_distribution.cdn"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_route53_record",
+      "name": "api",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "api.shop.example.com",
+            "type": "A"
+          },
+          "dependencies": [
+            "aws_route53_zone.primary",
+            "aws_lb.api"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_acm_certificate",
+      "name": "edge",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "domain_name": "shop.example.com",
+            "validation_method": "DNS"
+          },
+          "dependencies": [
+            "aws_route53_zone.primary"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_wafv2_web_acl",
+      "name": "edge",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-edge-acl",
+            "scope": "CLOUDFRONT"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_cloudfront_distribution",
+      "name": "cdn",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "domain_name": "d29fexample.cloudfront.net",
+            "enabled": true
+          },
+          "dependencies": [
+            "aws_s3_bucket.assets",
+            "aws_acm_certificate.edge",
+            "aws_wafv2_web_acl.edge"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_vpc",
+      "name": "main",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "cidr_block": "10.40.0.0/16",
+            "tags": {
+              "Name": "shop-prod"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_subnet",
+      "name": "public_a",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "cidr_block": "10.40.0.0/20",
+            "tags": {
+              "Name": "shop-prod-public-a"
+            }
+          },
+          "dependencies": [
+            "aws_vpc.main"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_subnet",
+      "name": "private_a",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "cidr_block": "10.40.16.0/20",
+            "tags": {
+              "Name": "shop-prod-private-a"
+            }
+          },
+          "dependencies": [
+            "aws_vpc.main"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_subnet",
+      "name": "private_b",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "cidr_block": "10.40.32.0/20",
+            "tags": {
+              "Name": "shop-prod-private-b"
+            }
+          },
+          "dependencies": [
+            "aws_vpc.main"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_nat_gateway",
+      "name": "main",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "tags": {
+              "Name": "shop-prod-nat"
+            }
+          },
+          "dependencies": [
+            "aws_subnet.public_a"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "edge",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-prod-alb"
+          },
+          "dependencies": [
+            "aws_vpc.main"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "app",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-prod-app"
+          },
+          "dependencies": [
+            "aws_vpc.main"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_security_group",
+      "name": "data",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-prod-data"
+          },
+          "dependencies": [
+            "aws_vpc.main"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lb",
+      "name": "api",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-prod-alb",
+            "load_balancer_type": "application"
+          },
+          "dependencies": [
+            "aws_subnet.public_a",
+            "aws_security_group.edge"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lb_target_group",
+      "name": "storefront",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-prod-storefront",
+            "port": 3000
+          },
+          "dependencies": [
+            "aws_vpc.main"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lb_listener",
+      "name": "https",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "port": 443,
+            "protocol": "HTTPS"
+          },
+          "dependencies": [
+            "aws_lb.api",
+            "aws_lb_target_group.storefront",
+            "aws_acm_certificate.edge"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_ecs_cluster",
+      "name": "main",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-prod"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_ecs_task_definition",
+      "name": "storefront",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "family": "shop-storefront",
+            "cpu": "512"
+          },
+          "dependencies": [
+            "aws_iam_role.ecs_task_execution",
+            "aws_cloudwatch_log_group.storefront"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_ecs_service",
+      "name": "storefront",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-storefront",
+            "desired_count": 3
+          },
+          "dependencies": [
+            "aws_ecs_cluster.main",
+            "aws_ecs_task_definition.storefront",
+            "aws_lb_target_group.storefront",
+            "aws_security_group.app",
+            "aws_subnet.private_a",
+            "aws_subnet.private_b"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_ecs_task_definition",
+      "name": "orders_api",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "family": "shop-orders-api",
+            "cpu": "1024"
+          },
+          "dependencies": [
+            "aws_iam_role.ecs_task_execution",
+            "aws_iam_role.orders_api",
+            "aws_cloudwatch_log_group.orders_api"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_ecs_service",
+      "name": "orders_api",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-orders-api",
+            "desired_count": 2
+          },
+          "dependencies": [
+            "aws_ecs_cluster.main",
+            "aws_ecs_task_definition.orders_api",
+            "aws_security_group.app",
+            "aws_subnet.private_a",
+            "aws_subnet.private_b"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_sqs_queue",
+      "name": "orders_dlq",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-orders-dlq"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_sqs_queue",
+      "name": "orders",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-orders"
+          },
+          "dependencies": [
+            "aws_sqs_queue.orders_dlq",
+            "aws_kms_key.data"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_sns_topic",
+      "name": "order_events",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-order-events"
+          },
+          "dependencies": [
+            "aws_kms_key.data"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_sns_topic_subscription",
+      "name": "orders",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "protocol": "sqs"
+          },
+          "dependencies": [
+            "aws_sns_topic.order_events",
+            "aws_sqs_queue.orders"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lambda_function",
+      "name": "order_worker",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "function_name": "shop-order-worker",
+            "runtime": "nodejs22.x"
+          },
+          "dependencies": [
+            "aws_iam_role.lambda_exec",
+            "aws_sqs_queue.orders",
+            "aws_dynamodb_table.carts",
+            "aws_s3_bucket.uploads",
+            "aws_cloudwatch_log_group.order_worker"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_lambda_event_source_mapping",
+      "name": "orders",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "batch_size": 10
+          },
+          "dependencies": [
+            "aws_lambda_function.order_worker",
+            "aws_sqs_queue.orders"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_db_subnet_group",
+      "name": "orders",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-prod-db"
+          },
+          "dependencies": [
+            "aws_subnet.private_a",
+            "aws_subnet.private_b"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_db_instance",
+      "name": "orders",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "identifier": "shop-orders-prod",
+            "engine": "postgres"
+          },
+          "dependencies": [
+            "aws_db_subnet_group.orders",
+            "aws_security_group.data",
+            "aws_secretsmanager_secret.db_password",
+            "aws_kms_key.data"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_elasticache_cluster",
+      "name": "sessions",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "cluster_id": "shop-sessions",
+            "engine": "redis"
+          },
+          "dependencies": [
+            "aws_subnet.private_a",
+            "aws_security_group.data"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_dynamodb_table",
+      "name": "carts",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-carts",
+            "billing_mode": "PAY_PER_REQUEST"
+          },
+          "dependencies": [
+            "aws_kms_key.data"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "assets",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "bucket": "shop-example-com-assets"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_s3_bucket",
+      "name": "uploads",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "bucket": "shop-example-com-uploads"
+          },
+          "dependencies": [
+            "aws_kms_key.data"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_kms_key",
+      "name": "data",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "description": "shop prod data key",
+            "tags": {
+              "Name": "shop-prod-data"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_secretsmanager_secret",
+      "name": "db_password",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop/prod/orders-db"
+          },
+          "dependencies": [
+            "aws_kms_key.data"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "ecs_task_execution",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-ecs-task-execution"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "orders_api",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-orders-api-task"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role_policy",
+      "name": "orders_api",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-orders-api-publish"
+          },
+          "dependencies": [
+            "aws_iam_role.orders_api",
+            "aws_sns_topic.order_events",
+            "aws_secretsmanager_secret.db_password",
+            "aws_caller_identity.current"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "lambda_exec",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-order-worker-exec"
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_iam_role_policy",
+      "name": "order_worker",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "shop-order-worker-access"
+          },
+          "dependencies": [
+            "aws_iam_role.lambda_exec",
+            "aws_sqs_queue.orders",
+            "aws_dynamodb_table.carts",
+            "aws_s3_bucket.uploads"
+          ]
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_cloudwatch_log_group",
+      "name": "storefront",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "/ecs/shop-storefront",
+            "retention_in_days": 30
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_cloudwatch_log_group",
+      "name": "orders_api",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "/ecs/shop-orders-api",
+            "retention_in_days": 30
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_cloudwatch_log_group",
+      "name": "order_worker",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "name": "/aws/lambda/shop-order-worker",
+            "retention_in_days": 14
+          }
+        }
+      ]
+    },
+    {
+      "mode": "managed",
+      "type": "aws_cloudwatch_metric_alarm",
+      "name": "dlq_depth",
+      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
+      "instances": [
+        {
+          "attributes": {
+            "alarm_name": "shop-orders-dlq-not-empty"
+          },
+          "dependencies": [
+            "aws_sqs_queue.orders_dlq",
+            "aws_sns_topic.order_events"
+          ]
+        }
+      ]
+    }
+  ]
+}

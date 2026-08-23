@@ -11,12 +11,13 @@ providers:
   # vSphere and on-prem, because the platform is whatever the state declares.
   - use: terraform
     with:
-      statePath: ./aws-config.tfstate.json
+      statePath: ./orders-platform.tfstate.json
       includeDataSources: false
 
   # Runtime source: what is *actually running*. Commented out because it needs
   # a live environment and a token; uncomment to reconcile intent against
-  # reality rather than intent against itself.
+  # reality rather than intent against itself. The `aliases` block in
+  # architecture.yaml is what joins its entity ids to the Terraform addresses.
   #
   # - use: dynatrace
   #   with:
@@ -32,14 +33,17 @@ render:
   #                  package), otherwise Mermaid. Same config works on a
   #                  developer laptop and a locked-down corporate machine.
   - view: context
-    to: docs/context.mmd
+    to: docs/context.svg
     engine: auto
 
   # Pin an engine when the output format matters to something downstream.
-  - view: email
-    to: docs/email.mmd
+  # Mermaid renders natively in a GitHub pull request.
+  - view: async
+    to: docs/async.mmd
     engine: mermaid
 
-  - view: dns
-    to: docs/dns.dot
+  # DOT source needs no engine at all — useful when the machine that builds
+  # the docs is not the machine allowed to install anything.
+  - view: network
+    to: docs/network.dot
     engine: dot
