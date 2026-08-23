@@ -1,0 +1,27 @@
+flowchart LR
+    subgraph n_lambda["lambda"]
+        n_aws_lambda_event_source_mapping_orders[/"orders<br/>aws_lambda_event_source_mapping"/]
+        n_aws_lambda_function_order_worker["shop-order-worker<br/>aws_lambda_function"]
+    end
+    subgraph n_sns["sns"]
+        n_aws_sns_topic_subscription_orders[/"orders<br/>aws_sns_topic_subscription"/]
+        n_aws_sns_topic_order_events[/"shop-order-events<br/>aws_sns_topic"/]
+    end
+    subgraph n_sqs["sqs"]
+        n_aws_sqs_queue_orders[/"shop-orders<br/>aws_sqs_queue"/]
+        n_aws_sqs_queue_orders_dlq[/"shop-orders-dlq<br/>aws_sqs_queue"/]
+    end
+    n_aws_lambda_event_source_mapping_orders --> n_aws_lambda_function_order_worker
+    n_aws_lambda_event_source_mapping_orders --> n_aws_sqs_queue_orders
+    n_aws_lambda_function_order_worker --> n_aws_sqs_queue_orders
+    n_aws_sns_topic_subscription_orders --> n_aws_sns_topic_order_events
+    n_aws_sns_topic_subscription_orders --> n_aws_sqs_queue_orders
+    n_aws_sqs_queue_orders --> n_aws_sqs_queue_orders_dlq
+    class n_aws_lambda_event_source_mapping_orders f_messaging;
+    class n_aws_lambda_function_order_worker f_compute;
+    class n_aws_sns_topic_subscription_orders f_messaging;
+    class n_aws_sns_topic_order_events f_messaging;
+    class n_aws_sqs_queue_orders f_messaging;
+    class n_aws_sqs_queue_orders_dlq f_messaging;
+    classDef f_compute fill:#fffbeb,stroke:#d97706,color:#0f172a;
+    classDef f_messaging fill:#f5f3ff,stroke:#7c3aed,color:#0f172a;
