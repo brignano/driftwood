@@ -1,0 +1,59 @@
+# Publishes @brignano/driftwood to npm when a GitHub release is published.
+#
+# Authentication is npm trusted publishing (OIDC) — there is deliberately no
+# NPM_TOKEN secret. The registry verifies a short-lived, workflow-scoped OIDC
+# token instead, and generates provenance automatically (so no --provenance
+# flag). This requires a trusted publisher configured on npmjs.com pointing at
+# this repository and this workflow filename.
+#
+# Trusted publishing cannot create a package that does not exist yet, so the
+# very first version must be published once by hand:
+#
+#   npm publish --access public
+#
+# After that, configure the trusted publisher and every release is tokenless.
+
+name: Publish Package
+
+on:
+  workflow_dispatch:
+  release:
+    # `published` fires both when publishing directly and when publishing a
+    # previously-saved draft. `created` does neither for drafts, which silently
+    # skips the publish.
+    types: [published]
+
+jobs:
+  # Reuse the full CI suite rather than a reduced copy: the graphviz-without-
+  # native-binary and wasm-disabled jobs are this package's core promise, and a
+  # release is the worst possible moment to skip them.
+  verify:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Mints the OIDC token that npm exchanges for publish rights.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+      # Trusted publishing needs npm >= 11.5.1; Node 22 still ships npm 10.x.
+      - name: Use an npm that supports trusted publishing
+        run: |
+          npm install -g npm@latest
+          npm --version
+      - run: npm ci
+      - run: npm run build
+      - name: Show what will actually be published
+        run: npm pack --dry-run
+      - name: Publish to npm
+        # Pre-releases go to the `next` dist-tag so they never become what a
+        # plain `npm i @brignano/driftwood` resolves to.
+        run: npm publish --access public ${{ github.event.release.prerelease && '--tag next' || '' }}

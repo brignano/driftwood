@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets publish.yml reuse this whole suite as a gate, so a release runs the
+  # same graphviz/wasm/drift assertions a PR does rather than a lesser subset.
+  workflow_call:
 
 jobs:
   test:

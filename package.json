@@ -4,6 +4,28 @@
   "description": "Architecture as code, reconciled with live infrastructure.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/brignano/driftwood.git"
+  },
+  "bugs": {
+    "url": "https://github.com/brignano/driftwood/issues"
+  },
+  "homepage": "https://github.com/brignano/driftwood#readme",
+  "keywords": [
+    "architecture",
+    "architecture-as-code",
+    "diagram",
+    "graphviz",
+    "mermaid",
+    "terraform",
+    "drift",
+    "infrastructure",
+    "cli"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "driftwood": "./dist/cli.js"
   },
