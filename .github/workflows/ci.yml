@@ -75,6 +75,29 @@ jobs:
       - name: Mermaid must still render under the same conditions
         run: node --jitless dist/cli.js render examples/architecture.yaml --view edge | grep -q "flowchart"
 
+  # The README embeds rendered output. A picture of the tool's own output that
+  # no longer matches what the tool produces is worse than no picture, so the
+  # committed renders are checked against their source rather than trusted —
+  # the drift gate's argument, one level up.
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Re-render the example and fail if the committed output is stale
+        run: |
+          npm run docs
+          if [ -n "$(git status --porcelain -- docs/ README.md)" ]; then
+            echo "::error::committed renders are out of date — run 'npm run docs' and commit the result"
+            git status --short -- docs/ README.md
+            git diff --stat -- docs/ README.md
+            exit 1
+          fi
+
   # Proves the drift gate works. In a real deployment this would run
   # `terraform show -json` against live state with a read-only role.
   drift:

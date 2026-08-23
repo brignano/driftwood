@@ -23,6 +23,14 @@ Installing the native `dot` binary is optional; driftwood will prefer it when pr
 npm run typecheck && npm test
 ```
 
+If you changed anything that affects rendering or the example model, also:
+
+```bash
+npm run docs      # regenerates docs/ and the README's embedded render
+```
+
+CI re-runs it and fails if the committed output differs, so a rendering change that leaves the README showing the old picture cannot merge.
+
 ## The two rules
 
 1. **No native dependencies, ever.** The install works with npm alone. This project exists because a required Graphviz binary made a tool un-installable inside a corporation. Pure JS and WebAssembly are fine as regular dependencies; a native binary may only be an opportunistic upgrade found by `probe()`.

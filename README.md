@@ -119,7 +119,7 @@ Catches schema errors, duplicate ids, edges pointing at entities that don't exis
 ### Render
 
 ```bash
-npx tsx src/cli.ts render examples/architecture.yaml --view app -o docs/app.svg
+npx tsx src/cli.ts render examples/architecture.yaml --view app -o app.svg
 ```
 
 ![The app view: an ALB listener and target group feeding two ECS services and their task definitions](docs/app.svg)
@@ -128,8 +128,11 @@ Nodes are drawn with a category icon, the entity name, and its `kind` underneath
 
 The icons are inlined into the SVG rather than handed to Graphviz as `image=` attributes, because the native `dot` binary resolves those as filesystem paths — a `data:` URI would work on the WASM tier and break on the native one. Post-processing the SVG means both tiers draw the same picture, and the result stays self-contained — no external references, no base64 bloat.
 
+Every image in this README is generated from `examples/architecture.yaml` by `npm run docs`, and CI re-runs it and fails if the result differs from what is committed. A stale picture of your own output is worse than no picture, so the renders are checked against their source rather than trusted — the drift gate's own argument, one level up.
+
 The `async` view through Mermaid, which renders natively in a pull request:
 
+<!-- generated:async -->
 ```mermaid
 flowchart LR
     subgraph n_lambda["lambda"]
@@ -159,8 +162,20 @@ flowchart LR
     classDef f_compute fill:#fffbeb,stroke:#d97706,color:#0f172a;
     classDef f_messaging fill:#f5f3ff,stroke:#7c3aed,color:#0f172a;
 ```
+<!-- /generated:async -->
 
 Mermaid has no icon primitive, so it maps the *same* categorisation onto shapes and colours — a queue must not be a queue in one engine and a cylinder in the other, or the two pictures stop describing the same system.
+
+#### The rest of the views
+
+| View | What it scopes to | File |
+|---|---|---|
+| `edge` | Route 53, CloudFront, ACM, WAF, the ALB | [svg](docs/edge.svg) |
+| `app` | Load balancer through to the ECS services | [svg](docs/app.svg) |
+| `data` | Postgres, Redis, DynamoDB, S3 | [svg](docs/data.svg) |
+| `async` | The SQS/SNS/Lambda order pipeline | [svg](docs/async.svg) |
+| `network` | VPC, subnets, security groups, NAT | [svg](docs/network.svg) |
+| `context` | Everything, minus IAM and CloudWatch noise | [svg](docs/context.svg) |
 
 **Views exist from v1, not as a later optimization.** Flat Mermaid becomes unreadable past roughly 150 nodes, and any real enterprise graph blows through that immediately. A view is a scoped slice matching entity ids or groups, with a trailing `*` wildcard. The example model ships six — `context`, `edge`, `app`, `data`, `async`, `network` — and even at 45 entities the difference between a view and the whole graph is the difference between a diagram and a wall.
 
@@ -310,7 +325,8 @@ src/
   config.ts              driftwood.config.yaml
   cli.ts                 validate · render · engines · providers · import · reconcile
 examples/                a worked 45-resource AWS platform, a drifted copy, and a config
-docs/                    rendered output committed for the README
+scripts/render-docs.ts   regenerates docs/ and the README's embedded render
+docs/                    committed renders of the example, kept current by CI
 .claude/skills/          add-provider and add-renderer walkthroughs for agents
 ```
 

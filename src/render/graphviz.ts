@@ -115,7 +115,20 @@ function runNativeDot(source: string, engine: string, format: string): Promise<s
   })
 }
 
-export async function renderGraphvizSvg(model: Model, ctx: RenderContext = {}): Promise<string> {
+/**
+ * @param forceTier Pin the tier instead of detecting one. The committed
+ * example renders use this: layout is byte-deterministic for a given Graphviz
+ * build, but a native `dot` and the bundled WASM build are two different
+ * builds, so a contributor with Graphviz installed would otherwise regenerate
+ * `docs/` into a diff that fails the freshness check in CI, where no `dot`
+ * exists. Pinning is for reproducibility only — nothing in normal rendering
+ * uses it, and `auto` must keep choosing for itself.
+ */
+export async function renderGraphvizSvg(
+  model: Model,
+  ctx: RenderContext = {},
+  forceTier?: Exclude<GraphvizTier, 'none'>,
+): Promise<string> {
   // Icons are on unless switched off: this renderer produces the finished
   // picture, so it is the one place a marker can actually become artwork.
   const withIcons = ctx.icons !== false
@@ -127,11 +140,17 @@ export async function renderGraphvizSvg(model: Model, ctx: RenderContext = {}): 
   const finish = (svg: string): string =>
     withIcons ? injectIcons(svg, (id) => accents.get(id) ?? PALETTE.other.accent) : svg
 
-  const tier = await detectTier()
+  const tier = forceTier ?? (await detectTier())
   if (tier === 'native') return finish(await runNativeDot(source, 'dot', 'svg'))
   if (tier === 'wasm') {
     const gv = await loadWasmGraphviz()
     if (gv) return finish(gv.layout(source, 'svg', 'dot'))
+    // Only reachable when the caller pinned `wasm`; detection would have
+    // returned 'none'. Say which tier was asked for, not just that it failed.
+    throw new Error(
+      'the bundled WASM Graphviz was requested but could not load — WebAssembly ' +
+        'is disabled in this runtime (for example `node --jitless`).',
+    )
   }
   throw new Error(
     'Graphviz is unavailable because WebAssembly is disabled in this runtime ' +
