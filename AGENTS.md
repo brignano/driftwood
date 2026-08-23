@@ -48,6 +48,19 @@ See `.claude/skills/add-renderer/SKILL.md`. Implement `Renderer` from `src/rende
 
 `probe()` is the important part — it reports whether the renderer can actually run here, which is what makes `--engine auto` degrade gracefully instead of failing.
 
+### Icons and colour
+
+`src/render/icons.ts` owns what an entity *is* (`iconFor`) and what colour it gets (`familyFor`, `PALETTE`). Every renderer classifies through it — Mermaid maps the same keys onto shapes because it has no icon primitive. Never add a second regex table; a queue drawn as a queue in one engine and a cylinder in another means the pictures no longer describe the same system.
+
+Icons are drawn in this repo, by category rather than by vendor: no asset pack to vendor, no trademark terms, and one glyph that serves RDS, Cloud SQL and an on-prem Postgres alike.
+
+Two things about the mechanism are load-bearing and easy to break:
+
+- **The icon is never handed to Graphviz.** `image=` is resolved as a filesystem path by the native binary, so a `data:` URI would work on the WASM tier and fail on the native one. Instead `renderDot` reserves a fixed-size label cell holding a 1pt marker, and `injectIcons` swaps markers for inline SVG after layout. Both tiers therefore draw the same picture.
+- **The marker must survive Graphviz's SVG escaping.** It is `@@dwicon_<key>@@` — letters, digits, `_` and `@` only. A hyphen comes back out as `&#45;` and the marker stops matching itself. CI asserts no marker survives into rendered output.
+
+Node geometry is a design decision, not an accident: an icon above a name above a small muted `kind` gives a roughly 3:2 box, where a single line of text gives something nearer 6:1, and a page of 6:1 boxes is what reads as squashed.
+
 ### Engine tiers (the Graphviz answer)
 
 | Tier | Requirement | Notes |
@@ -85,6 +98,14 @@ This is honest but limited. Do not claim in docs or output that driftwood resolv
 - Every provider's output must pass `validateModel`. Dangling edges are a provider bug, not something the validator should tolerate.
 - Tests live in `test/`, named for the module under test. **Cover failure modes, not just happy paths** — the existing suite tests dangling edges, ignore precedence, view filtering dropping half-visible edges, and alias-induced self-loops.
 - Tests must pass both with Graphviz available (the default) and with WebAssembly disabled. Anything engine-dependent branches on `probe()`.
+
+## The worked example
+
+`examples/` holds a fictional e-commerce platform, `orders-platform`: 45 Terraform resources across edge (Route 53, CloudFront, ACM, WAF), network (VPC, subnets, security groups), an ALB in front of two ECS services, Postgres/Redis/DynamoDB/S3, an SQS+SNS+Lambda order pipeline, IAM and KMS, and CloudWatch. It is deliberately large enough that views are load-bearing rather than decorative.
+
+- `orders-platform.tfstate.json` is the source of truth. `architecture.yaml` is `import terraform` output plus hand-written `views`, `ignore`, `aliases` and `coverage`, which no importer can infer.
+- **If you change the state file, re-import and re-apply those four blocks** — `group` is a compared field, so a hand-edited group that the importer would not produce shows up as permanent drift and the CI drift gate goes red.
+- `orders-platform.drifted.tfstate.json` is the same platform later: two resources created by hand, one deleted, one renamed. CI asserts that reconciling against it exits non-zero.
 
 ## Commands
 

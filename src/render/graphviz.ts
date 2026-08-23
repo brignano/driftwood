@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import type { Model } from '../model/schema.js'
 import { renderDot } from './dot.js'
+import { PALETTE, injectIcons, styleFor } from './icons.js'
 import { defineRenderer } from './types.js'
 import type { Availability, RenderContext } from './types.js'
 
@@ -115,12 +116,22 @@ function runNativeDot(source: string, engine: string, format: string): Promise<s
 }
 
 export async function renderGraphvizSvg(model: Model, ctx: RenderContext = {}): Promise<string> {
-  const source = renderDot(model, ctx)
+  // Icons are on unless switched off: this renderer produces the finished
+  // picture, so it is the one place a marker can actually become artwork.
+  const withIcons = ctx.icons !== false
+  const source = renderDot(model, { ...ctx, icons: withIcons })
+
+  // Colour by the entity's own kind rather than by anything in the SVG, so the
+  // icon always matches the border Graphviz drew around it.
+  const accents = new Map(model.entities.map((e) => [e.id, styleFor(e.kind).accent]))
+  const finish = (svg: string): string =>
+    withIcons ? injectIcons(svg, (id) => accents.get(id) ?? PALETTE.other.accent) : svg
+
   const tier = await detectTier()
-  if (tier === 'native') return runNativeDot(source, 'dot', 'svg')
+  if (tier === 'native') return finish(await runNativeDot(source, 'dot', 'svg'))
   if (tier === 'wasm') {
     const gv = await loadWasmGraphviz()
-    if (gv) return gv.layout(source, 'svg', 'dot')
+    if (gv) return finish(gv.layout(source, 'svg', 'dot'))
   }
   throw new Error(
     'Graphviz is unavailable because WebAssembly is disabled in this runtime ' +

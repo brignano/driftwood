@@ -42,21 +42,27 @@ program
   .option('--view <id>', 'render a single named view')
   .option('--engine <name>', 'auto | mermaid | dot | graphviz', 'auto')
   .option('--direction <dir>', 'LR or TD', 'LR')
+  .option('--no-icons', 'draw plain boxes instead of category icons')
   .option('-o, --out <file>', 'write to a file instead of stdout')
-  .action(async (path: string, opts: { view?: string; engine: string; direction: string; out?: string }) => {
-    const model = requireModel(path)
-    const direction = opts.direction === 'TD' ? 'TD' : 'LR'
-    const result = await render(model, { view: opts.view, direction }, opts.engine)
-    if (result.fellBackFrom) {
-      console.error(`note: ${result.fellBackFrom} unavailable, using ${result.renderer.name} (${result.via})`)
-    }
-    if (opts.out) {
-      writeFileSync(opts.out, result.output)
-      console.error(`wrote ${opts.out} via ${result.renderer.name} (${result.via})`)
-    } else {
-      process.stdout.write(result.output)
-    }
-  })
+  .action(
+    async (
+      path: string,
+      opts: { view?: string; engine: string; direction: string; icons: boolean; out?: string },
+    ) => {
+      const model = requireModel(path)
+      const direction = opts.direction === 'TD' ? 'TD' : 'LR'
+      const result = await render(model, { view: opts.view, direction, icons: opts.icons }, opts.engine)
+      if (result.fellBackFrom) {
+        console.error(`note: ${result.fellBackFrom} unavailable, using ${result.renderer.name} (${result.via})`)
+      }
+      if (opts.out) {
+        writeFileSync(opts.out, result.output)
+        console.error(`wrote ${opts.out} via ${result.renderer.name} (${result.via})`)
+      } else {
+        process.stdout.write(result.output)
+      }
+    },
+  )
 
 program
   .command('engines')

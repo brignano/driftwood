@@ -8,6 +8,7 @@ import { providers } from '../src/providers/index.js'
 import { renderers, resolveRenderer } from '../src/render/index.js'
 import { defineRenderer } from '../src/render/types.js'
 import { renderDot } from '../src/render/dot.js'
+import { PALETTE } from '../src/render/icons.js'
 import { toModel as dynatraceToModel } from '../src/providers/dynatrace.js'
 
 const model = (partial: Partial<Model>): Model => Model.parse({ version: 1, name: 't', ...partial })
@@ -170,14 +171,26 @@ describe('renderer extension point and engine fallback', () => {
     })
     const dot = renderDot(m)
     expect(dot).toContain('digraph "t"')
-    expect(dot).toContain('shape=cylinder')
     expect(dot).toContain('"b" -> "a"')
     expect(dot).toContain('subgraph cluster_0')
+    // Colour comes from the entity's family: a bucket is data, a function is
+    // compute, so the two nodes must not be drawn identically.
+    expect(dot).toContain(`color="${PALETTE.data.accent}"`)
+    expect(dot).toContain(`color="${PALETTE.compute.accent}"`)
   })
 
   it('escapes quotes in DOT labels', () => {
     const m = model({ entities: [{ id: 'a', kind: 'service', name: 'say "hi"' }] })
-    expect(renderDot(m)).toContain('\\"hi\\"')
+    // HTML-like labels are parsed as XML, so a bare quote is an entity
+    // reference problem rather than a DOT-string one.
+    expect(renderDot(m)).toContain('&quot;hi&quot;')
+  })
+
+  it('escapes ids and the graph name as DOT strings, not as XML', () => {
+    const m = model({ name: 'say "hi"', entities: [{ id: 'a"b', kind: 'service' }] })
+    const dot = renderDot(m)
+    expect(dot).toContain('digraph "say \\"hi\\""')
+    expect(dot).toContain('"a\\"b"')
   })
 })
 

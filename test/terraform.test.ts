@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { importTerraformState, parseTerraformState } from '../src/providers/terraform.js'
 import { validateModel } from '../src/model/validate.js'
 
-const state = parseTerraformState(readFileSync(new URL('../examples/aws-config.tfstate.json', import.meta.url), 'utf8'))
+const state = parseTerraformState(readFileSync(new URL('../examples/orders-platform.tfstate.json', import.meta.url), 'utf8'))
 
 describe('parseTerraformState', () => {
   it('rejects an unsupported state version', () => {
@@ -18,7 +18,7 @@ describe('parseTerraformState', () => {
 describe('importTerraformState', () => {
   it('uses the Terraform address as the entity id', () => {
     const model = importTerraformState(state)
-    expect(model.entities.map((e) => e.id)).toContain('aws_s3_bucket.emails')
+    expect(model.entities.map((e) => e.id)).toContain('aws_s3_bucket.assets')
   })
 
   it('skips data sources unless asked for them', () => {
@@ -32,8 +32,8 @@ describe('importTerraformState', () => {
   it('derives edges from dependencies', () => {
     const model = importTerraformState(state)
     expect(model.edges).toContainEqual({
-      from: 'aws_lambda_function.email_forwarder',
-      to: 'aws_s3_bucket.emails',
+      from: 'aws_lambda_function.order_worker',
+      to: 'aws_sqs_queue.orders',
       kind: 'depends-on',
     })
   })
@@ -49,15 +49,32 @@ describe('importTerraformState', () => {
 
   it('prefers a conventional name attribute for the label', () => {
     const model = importTerraformState(state)
-    const bucket = model.entities.find((e) => e.id === 'aws_s3_bucket.emails')
-    expect(bucket?.name).toBe('brignano.io-emails')
-    const fn = model.entities.find((e) => e.id === 'aws_lambda_function.email_forwarder')
-    expect(fn?.name).toBe('email-forwarder')
+    const bucket = model.entities.find((e) => e.id === 'aws_s3_bucket.assets')
+    expect(bucket?.name).toBe('shop-example-com-assets')
+    const fn = model.entities.find((e) => e.id === 'aws_lambda_function.order_worker')
+    expect(fn?.name).toBe('shop-order-worker')
+  })
+
+  it('falls back through the other conventional name attributes', () => {
+    const model = importTerraformState(state)
+    // Terraform has no universal "name": a cache cluster calls it cluster_id,
+    // a task definition family, an alarm alarm_name. Falling straight through
+    // to the local resource name loses the only label a reader recognises.
+    expect(model.entities.find((e) => e.id === 'aws_elasticache_cluster.sessions')?.name).toBe('shop-sessions')
+    expect(model.entities.find((e) => e.id === 'aws_ecs_task_definition.storefront')?.name).toBe('shop-storefront')
+    expect(model.entities.find((e) => e.id === 'aws_cloudwatch_metric_alarm.dlq_depth')?.name).toBe(
+      'shop-orders-dlq-not-empty',
+    )
+  })
+
+  it('falls back to the tag named Name when nothing conventional is set', () => {
+    const model = importTerraformState(state)
+    expect(model.entities.find((e) => e.id === 'aws_vpc.main')?.name).toBe('shop-prod')
   })
 
   it('groups by the resource-type segment after the provider prefix', () => {
     const model = importTerraformState(state)
-    expect(model.entities.find((e) => e.id === 'aws_s3_bucket.emails')?.group).toBe('s3')
+    expect(model.entities.find((e) => e.id === 'aws_s3_bucket.assets')?.group).toBe('s3')
     expect(model.entities.find((e) => e.id === 'aws_iam_role.lambda_exec')?.group).toBe('iam')
   })
 
