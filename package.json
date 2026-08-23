@@ -1,6 +1,6 @@
 {
   "name": "@brignano/driftwood",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Architecture as code, reconciled with live infrastructure.",
   "type": "module",
   "license": "MIT",
