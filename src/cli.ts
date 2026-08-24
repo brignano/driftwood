@@ -9,6 +9,7 @@ import { formatDrift, reconcile } from './reconcile/index.js'
 import { formatConflicts } from './model/merge.js'
 import { loadConfig, observeAll } from './config.js'
 import type { Model } from './model/schema.js'
+import { z } from 'zod'
 
 const program = new Command()
 program
@@ -24,6 +25,23 @@ function requireModel(path: string): Model {
     process.exit(1)
   }
   return result.model
+}
+
+const Health = z.record(z.enum(['healthy', 'degraded', 'down']))
+
+function requireHealth(path: string): Record<string, 'healthy' | 'degraded' | 'down'> {
+  let raw: unknown
+  try {
+    raw = JSON.parse(readFileSync(path, 'utf8'))
+  } catch (error) {
+    throw new Error(`could not read health file ${path}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  const result = Health.safeParse(raw)
+  if (!result.success) {
+    const detail = result.error.issues.map((issue) => `  ${issue.path.join('.') || '(root)'}: ${issue.message}`).join('\n')
+    throw new Error(`invalid health file ${path}:\n${detail}`)
+  }
+  return result.data
 }
 
 program
@@ -42,16 +60,25 @@ program
   .option('--view <id>', 'render a single named view')
   .option('--engine <name>', 'auto | mermaid | dot | graphviz', 'auto')
   .option('--direction <dir>', 'LR or TD', 'LR')
+  .option('--health <file>', 'JSON file mapping entity ids to healthy, degraded, or down')
   .option('--no-icons', 'draw plain boxes instead of category icons')
   .option('-o, --out <file>', 'write to a file instead of stdout')
   .action(
     async (
       path: string,
-      opts: { view?: string; engine: string; direction: string; icons: boolean; out?: string },
+      opts: {
+        view?: string
+        engine: string
+        direction: string
+        health?: string
+        icons: boolean
+        out?: string
+      },
     ) => {
       const model = requireModel(path)
       const direction = opts.direction === 'TD' ? 'TD' : 'LR'
-      const result = await render(model, { view: opts.view, direction, icons: opts.icons }, opts.engine)
+      const health = opts.health ? requireHealth(opts.health) : undefined
+      const result = await render(model, { view: opts.view, direction, health, icons: opts.icons }, opts.engine)
       if (result.fellBackFrom) {
         console.error(`note: ${result.fellBackFrom} unavailable, using ${result.renderer.name} (${result.via})`)
       }

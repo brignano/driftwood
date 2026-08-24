@@ -1,0 +1,5 @@
+{
+  "aws_lb.api": "healthy",
+  "aws_ecs_service.storefront": "degraded",
+  "aws_db_instance.orders": "down"
+}

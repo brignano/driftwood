@@ -130,6 +130,15 @@ The icons are inlined into the SVG rather than handed to Graphviz as `image=` at
 
 Every image in this README is generated from `examples/architecture.yaml` by `npm run docs`, and CI re-runs it and fails if the result differs from what is committed. A stale picture of your own output is worse than no picture, so the renders are checked against their source rather than trusted — the drift gate's own argument, one level up.
 
+Runtime health can be overlaid without changing the committed model. Pass a JSON object whose keys are entity ids and whose values are `healthy`, `degraded`, or `down`:
+
+```bash
+npx tsx src/cli.ts render examples/architecture.yaml --view app \
+  --health examples/health.json -o app-health.svg
+```
+
+The sample health map is [examples/health.json](examples/health.json). Health is render-time data only, so it is not included in reconciliation or written back to `architecture.yaml`.
+
 The `async` view through Mermaid, which renders natively in a pull request:
 
 <!-- generated:async -->
@@ -349,6 +358,7 @@ Built:
 - [x] Multi-provider merge with provenance, explicit aliases, and conflict reporting
 - [x] Declarative `driftwood.config.yaml` wiring
 - [x] Reconciler with an explicit drift policy, wired as a CI gate
+- [x] Render-time health overlay for healthy, degraded, and down entities
 
 Deliberately not built yet, roughly in order:
 
@@ -356,7 +366,6 @@ Deliberately not built yet, roughly in order:
 - [ ] Live cloud API providers (AWS, GCP) to catch resources no IaC owns
 - [ ] A Splunk provider (the extension point is ready; no implementation shipped yet)
 - [ ] Preserve human/agent annotations across regeneration
-- [ ] Health overlay on the 2D graph (the renderer already accepts it)
 - [ ] Interactive viewer, blast-radius traversal
 - [ ] 3D — last, optional, and only if someone actually asks
 
