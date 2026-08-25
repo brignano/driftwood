@@ -133,11 +133,11 @@ Every image in this README is generated from `examples/architecture.yaml` by `np
 Runtime health can be overlaid without changing the committed model. Pass a JSON object whose keys are entity ids and whose values are `healthy`, `degraded`, or `down`:
 
 ```bash
-npx tsx src/cli.ts render examples/architecture.yaml --view app \
+npx tsx src/cli.ts render examples/architecture.yaml --view edge \
   --health examples/health.json -o app-health.svg
 ```
 
-The sample health map is [examples/health.json](examples/health.json). Health is render-time data only, so it is not included in reconciliation or written back to `architecture.yaml`.
+The sample health map is [examples/health.json](examples/health.json). The `edge` view includes `aws_db_instance.orders`, so it demonstrates a `down` node in the rendered output. Health is render-time data only, so it is not included in reconciliation or written back to `architecture.yaml`.
 
 The `async` view through Mermaid, which renders natively in a pull request:
 

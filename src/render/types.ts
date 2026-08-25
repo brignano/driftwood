@@ -1,10 +1,11 @@
 import type { Model } from '../model/schema.js'
+import type { HealthMap } from '../health.js'
 
 export interface RenderContext {
   view?: string
   direction?: 'LR' | 'TD'
   /** Runtime health, applied at render time. Never committed to the model. */
-  health?: Record<string, 'healthy' | 'degraded' | 'down'>
+  health?: HealthMap
   /**
    * Draw category icons on nodes. Only renderers that produce final artwork
    * honour this — Mermaid has no icon primitive, and raw DOT source has no

@@ -38,3 +38,5 @@ export type { Drift, FieldChange, ComparedField } from './reconcile/index.js'
 // Config
 export { loadConfig, observeAll, makeContext, Config } from './config.js'
 export type { LoadedConfig } from './config.js'
+export { parseHealthMap, HealthStatus } from './health.js'
+export type { HealthMap } from './health.js'

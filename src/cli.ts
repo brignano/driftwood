@@ -9,7 +9,7 @@ import { formatDrift, reconcile } from './reconcile/index.js'
 import { formatConflicts } from './model/merge.js'
 import { loadConfig, observeAll } from './config.js'
 import type { Model } from './model/schema.js'
-import { z } from 'zod'
+import { parseHealthMap } from './health.js'
 
 const program = new Command()
 program
@@ -27,8 +27,6 @@ function requireModel(path: string): Model {
   return result.model
 }
 
-const Health = z.record(z.enum(['healthy', 'degraded', 'down']))
-
 function requireHealth(path: string): Record<string, 'healthy' | 'degraded' | 'down'> {
   let raw: unknown
   try {
@@ -36,12 +34,12 @@ function requireHealth(path: string): Record<string, 'healthy' | 'degraded' | 'd
   } catch (error) {
     throw new Error(`could not read health file ${path}: ${error instanceof Error ? error.message : String(error)}`)
   }
-  const result = Health.safeParse(raw)
-  if (!result.success) {
-    const detail = result.error.issues.map((issue) => `  ${issue.path.join('.') || '(root)'}: ${issue.message}`).join('\n')
-    throw new Error(`invalid health file ${path}:\n${detail}`)
+
+  try {
+    return parseHealthMap(raw, `health file ${path}`)
+  } catch (error) {
+    throw new Error(`invalid health file ${path}:\n${error instanceof Error ? error.message : String(error)}`)
   }
-  return result.data
 }
 
 program
@@ -78,6 +76,12 @@ program
       const model = requireModel(path)
       const direction = opts.direction === 'TD' ? 'TD' : 'LR'
       const health = opts.health ? requireHealth(opts.health) : undefined
+      if (health) {
+        const missing = Object.keys(health).filter((id) => !model.entities.some((entity) => entity.id === id))
+        if (missing.length > 0) {
+          console.error(`note: health file contains ${missing.length} unknown entity id(s): ${missing.join(', ')}`)
+        }
+      }
       const result = await render(model, { view: opts.view, direction, health, icons: opts.icons }, opts.engine)
       if (result.fellBackFrom) {
         console.error(`note: ${result.fellBackFrom} unavailable, using ${result.renderer.name} (${result.via})`)
