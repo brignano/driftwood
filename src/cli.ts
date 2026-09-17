@@ -9,6 +9,7 @@ import { formatDrift, reconcile } from './reconcile/index.js'
 import { formatConflicts } from './model/merge.js'
 import { loadConfig, observeAll } from './config.js'
 import type { Model } from './model/schema.js'
+import { loadHealthMap, unknownHealthIds } from './health.js'
 
 const program = new Command()
 program
@@ -42,16 +43,31 @@ program
   .option('--view <id>', 'render a single named view')
   .option('--engine <name>', 'auto | mermaid | dot | graphviz', 'auto')
   .option('--direction <dir>', 'LR or TD', 'LR')
+  .option('--health <file>', 'JSON file mapping entity ids to healthy, degraded, or down')
   .option('--no-icons', 'draw plain boxes instead of category icons')
   .option('-o, --out <file>', 'write to a file instead of stdout')
   .action(
     async (
       path: string,
-      opts: { view?: string; engine: string; direction: string; icons: boolean; out?: string },
+      opts: {
+        view?: string
+        engine: string
+        direction: string
+        health?: string
+        icons: boolean
+        out?: string
+      },
     ) => {
       const model = requireModel(path)
       const direction = opts.direction === 'TD' ? 'TD' : 'LR'
-      const result = await render(model, { view: opts.view, direction, icons: opts.icons }, opts.engine)
+      const health = opts.health ? loadHealthMap(opts.health) : undefined
+      if (health) {
+        const unknown = unknownHealthIds(health, model)
+        if (unknown.length > 0) {
+          console.error(`note: health file contains ${unknown.length} unknown entity id(s): ${unknown.join(', ')}`)
+        }
+      }
+      const result = await render(model, { view: opts.view, direction, health, icons: opts.icons }, opts.engine)
       if (result.fellBackFrom) {
         console.error(`note: ${result.fellBackFrom} unavailable, using ${result.renderer.name} (${result.via})`)
       }
