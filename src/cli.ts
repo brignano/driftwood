@@ -9,7 +9,7 @@ import { formatDrift, reconcile } from './reconcile/index.js'
 import { formatConflicts } from './model/merge.js'
 import { loadConfig, observeAll } from './config.js'
 import type { Model } from './model/schema.js'
-import { parseHealthMap } from './health.js'
+import { loadHealthMap, unknownHealthIds } from './health.js'
 
 const program = new Command()
 program
@@ -25,21 +25,6 @@ function requireModel(path: string): Model {
     process.exit(1)
   }
   return result.model
-}
-
-function requireHealth(path: string): Record<string, 'healthy' | 'degraded' | 'down'> {
-  let raw: unknown
-  try {
-    raw = JSON.parse(readFileSync(path, 'utf8'))
-  } catch (error) {
-    throw new Error(`could not read health file ${path}: ${error instanceof Error ? error.message : String(error)}`)
-  }
-
-  try {
-    return parseHealthMap(raw, `health file ${path}`)
-  } catch (error) {
-    throw new Error(`invalid health file ${path}:\n${error instanceof Error ? error.message : String(error)}`)
-  }
 }
 
 program
@@ -75,11 +60,11 @@ program
     ) => {
       const model = requireModel(path)
       const direction = opts.direction === 'TD' ? 'TD' : 'LR'
-      const health = opts.health ? requireHealth(opts.health) : undefined
+      const health = opts.health ? loadHealthMap(opts.health) : undefined
       if (health) {
-        const missing = Object.keys(health).filter((id) => !model.entities.some((entity) => entity.id === id))
-        if (missing.length > 0) {
-          console.error(`note: health file contains ${missing.length} unknown entity id(s): ${missing.join(', ')}`)
+        const unknown = unknownHealthIds(health, model)
+        if (unknown.length > 0) {
+          console.error(`note: health file contains ${unknown.length} unknown entity id(s): ${unknown.join(', ')}`)
         }
       }
       const result = await render(model, { view: opts.view, direction, health, icons: opts.icons }, opts.engine)
