@@ -93,7 +93,7 @@ npm install
 npm run build
 ```
 
-Requires Node 20+. Runtime dependencies are `commander`, `yaml`, `zod`, and `@hpcc-js/wasm-graphviz` — all pure JavaScript/WebAssembly, no native builds and no system packages.
+Running driftwood requires Node 20+. Runtime dependencies are `commander`, `yaml`, `zod`, and `@hpcc-js/wasm-graphviz` — all pure JavaScript/WebAssembly, no native builds and no system packages. (Developing driftwood asks for a newer Node than running it does — see [Development](#development).)
 
 ## Usage
 
@@ -344,10 +344,14 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 98 tests
+npm test        # 113 tests
 npm run typecheck
 npm run build
 ```
+
+**Develop on Node 22.12+**, one major above the Node 20+ the tool itself runs on. Vitest 5 declares `engines: ^22.12.0 || ^24.0.0 || >=26.0.0`, and CI runs Node 22 on every job. npm only warns (`EBADENGINE`) rather than refusing the install, and the suite does still pass on Node 20 today — but that is unsupported and one Vitest release away from breaking, so match CI rather than rely on it.
+
+The gap is deliberate and one-directional. driftwood ships as pure JavaScript with no build step for the consumer, so the floor for *using* it is set by the runtime deps and stays low; the floor for *developing* it is set by the dev toolchain and is free to move. A test runner that wants a newer Node must never raise the bar for someone installing the CLI.
 
 ## Where this is going
 
