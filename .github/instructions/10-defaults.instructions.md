@@ -6,7 +6,7 @@ applyTo: "**/*"
 
 Before editing, read `AGENTS.md`, `package.json`, and the nearest implementation and test for the behavior.
 
-Use Opus 5 by default for architecture, planning, review, risk analysis, and final synthesis. A faster coding model may handle repetitive edits, but final validation and synthesis return to Opus 5.
+Use the strongest available model for architecture, planning, review, risk analysis, and final synthesis. A faster model may handle repetitive or mechanical edits, but final validation and synthesis return to the stronger one.
 
 Use existing TypeScript, Zod, Vitest, and ESM patterns. Keep changes minimal, preserve public APIs, and test behavior and failure modes. Prefer repository tools and pure functions over new abstractions.
 
