@@ -197,7 +197,7 @@ npx tsx src/cli.ts reconcile examples/architecture.yaml \
   --terraform examples/orders-platform.drifted.tfstate.json
 ```
 
-Two resources created by hand during an incident, one bucket deleted, one database renamed:
+Two resources created by hand during an incident, one bucket deleted, one database renamed — and one secret the CI role simply cannot see:
 
 ```markdown
 ## Architecture drift detected
@@ -226,8 +226,22 @@ Two resources created by hand during an incident, one bucket deleted, one databa
 - **removed** `aws_lambda_function.order_worker` -> `aws_s3_bucket.uploads`
 - **removed** `aws_s3_bucket.uploads` -> `aws_kms_key.data`
 
+### Declared, but not verifiable (4)
+
+_Inside a declared blind spot, so absence from the observation is unknown, not absent. Kept in the model rather than reported as removed._
+
+| Entity | Blind spot | Why |
+|---|---|---|
+| `aws_secretsmanager_secret.db_password` | `aws_secretsmanager_*` | the read-only role used by CI can list secret names but not versions |
+
+- `aws_db_instance.orders` -> `aws_secretsmanager_secret.db_password` - within `aws_secretsmanager_*`
+- `aws_iam_role_policy.orders_api` -> `aws_secretsmanager_secret.db_password` - within `aws_secretsmanager_*`
+- `aws_secretsmanager_secret.db_password` -> `aws_kms_key.data` - within `aws_secretsmanager_*`
+
 _Ignored by policy: 1 entities, 0 edges._
 ```
+
+The bucket was deleted and is reported as deleted. The secret was not — the role reading this state cannot list secrets, so it never came back — and that is the difference between the two sections. Collapsing them would mean proposing the deletion of a secret nobody deleted.
 
 Exits **1** on drift and **0** when clean, so it works directly as a CI gate. Output is markdown because its destination is a pull request body.
 
@@ -300,6 +314,7 @@ This is the design decision most likely to sink the project in practice. Report 
 | `kind`, `name`, or `group` changes | **Yes** |
 | A tag is added or changed | No |
 | Anything matching an `ignore` rule | No |
+| A resource disappears inside a declared `coverage` gap | No — reported separately as not verifiable |
 
 `ignore` holds intentional divergence, reviewed like code. An edge touching an ignored entity is ignored by implication — otherwise ignoring one noisy resource would still surface all of its edges.
 
@@ -312,6 +327,10 @@ coverage:
   - scope: aws_secretsmanager_*
     reason: the read-only role used by CI cannot list secrets
 ```
+
+A blind spot changes what a *disappearance* means. A declared entity that the providers never observed is reported under **Declared, but not verifiable** instead of as a removal, and it does not count towards the exit code — otherwise every run with read-only credentials fails, and a gate that always fails is a gate that gets muted. A scope matches an entity's id or its kind, and an edge inherits the blind spot of either endpoint, since a provider that cannot see a resource cannot see its relationships either.
+
+The rule runs one way only. Coverage never suppresses an **addition**: a blind spot means "might not be seen", never "must not be reported", so a resource appearing inside one is newly visible and is reported normally. Nor does it affect a **change**, because an entity that was compared was, by definition, observed.
 
 These are printed with every drift report. "Always matches live platform data" is a promise no tool can keep; reconciliation with declared blind spots is one it can.
 

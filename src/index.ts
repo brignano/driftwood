@@ -33,7 +33,14 @@ export { selectEntities } from './render/select.js'
 
 // Reconciliation
 export { reconcile, formatDrift, COMPARED_FIELDS } from './reconcile/index.js'
-export type { Drift, FieldChange, ComparedField } from './reconcile/index.js'
+export type {
+  Drift,
+  FieldChange,
+  ComparedField,
+  CoverageGap,
+  UnverifiableEntity,
+  UnverifiableEdge,
+} from './reconcile/index.js'
 
 // Config
 export { loadConfig, observeAll, makeContext, Config } from './config.js'

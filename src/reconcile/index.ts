@@ -19,11 +19,27 @@ export interface FieldChange {
   observed: string | undefined
 }
 
+export type CoverageGap = Model['coverage'][number]
+
+/**
+ * Declared, not observed, and inside a declared blind spot — so its absence
+ * from the observation says nothing about its absence in reality. Reported
+ * apart from `removed` and deliberately excluded from `hasDrift`.
+ */
+export interface UnverifiableEntity extends CoverageGap {
+  entity: Entity
+}
+
+export interface UnverifiableEdge extends CoverageGap {
+  edge: Edge
+}
+
 export interface Drift {
   entities: { added: Entity[]; removed: Entity[]; changed: FieldChange[] }
   edges: { added: Edge[]; removed: Edge[] }
+  unverifiable: { entities: UnverifiableEntity[]; edges: UnverifiableEdge[] }
   ignored: { entities: number; edges: number }
-  coverage: Array<{ scope: string; reason: string }>
+  coverage: CoverageGap[]
   hasDrift: boolean
 }
 
@@ -42,6 +58,34 @@ function isIgnoredEdge(model: Model, edge: Edge): boolean {
   return ignoredId(edge.from) || ignoredId(edge.to)
 }
 
+/**
+ * The declared blind spot covering an entity, or undefined when the observing
+ * providers were genuinely able to see it.
+ *
+ * A scope matches an entity's id *or* its kind, so a gap can be declared as a
+ * class of resource (`aws_secretsmanager_*`, matching the kind) or as a set of
+ * addresses (`aws_route53_record.*`, matching the id).
+ */
+function coverageGapFor(model: Model, e: Entity): CoverageGap | undefined {
+  return model.coverage.find((c) => matches(c.scope, e.id) || matches(c.scope, e.kind))
+}
+
+/**
+ * A provider that cannot see an entity cannot see its relationships either, so
+ * an edge inherits the blind spot of either endpoint — the same implication
+ * that makes an edge touching an ignored entity ignored.
+ */
+function edgeCoverageGap(model: Model, byId: Map<string, Entity>, edge: Edge): CoverageGap | undefined {
+  for (const id of [edge.from, edge.to]) {
+    const entity = byId.get(id)
+    const gap = entity
+      ? coverageGapFor(model, entity)
+      : model.coverage.find((c) => matches(c.scope, id))
+    if (gap) return gap
+  }
+  return undefined
+}
+
 export function reconcile(declared: Model, observed: Model): Drift {
   const declaredById = new Map(declared.entities.map((e) => [e.id, e]))
   const observedById = new Map(observed.entities.map((e) => [e.id, e]))
@@ -49,8 +93,12 @@ export function reconcile(declared: Model, observed: Model): Drift {
   const added: Entity[] = []
   const removed: Entity[] = []
   const changed: FieldChange[] = []
+  const unverifiableEntities: UnverifiableEntity[] = []
   let ignoredEntities = 0
 
+  // Coverage deliberately does not suppress additions. A blind spot means
+  // "might not be seen", never "must not be reported" — something appearing
+  // inside one is newly visible, and hiding it would lose a real resource.
   for (const [id, obs] of observedById) {
     if (declaredById.has(id)) continue
     if (isIgnoredEntity(declared, obs)) {
@@ -64,6 +112,13 @@ export function reconcile(declared: Model, observed: Model): Drift {
     if (observedById.has(id)) continue
     if (isIgnoredEntity(declared, dec)) {
       ignoredEntities++
+      continue
+    }
+    // Unknown is not absent. Reporting this as removed would invite a fix
+    // that deletes an entity nobody deleted.
+    const gap = coverageGapFor(declared, dec)
+    if (gap) {
+      unverifiableEntities.push({ entity: dec, ...gap })
       continue
     }
     removed.push(dec)
@@ -84,6 +139,7 @@ export function reconcile(declared: Model, observed: Model): Drift {
   const observedEdges = new Map(observed.edges.map((e) => [edgeKey(e), e]))
   const addedEdges: Edge[] = []
   const removedEdges: Edge[] = []
+  const unverifiableEdges: UnverifiableEdge[] = []
   let ignoredEdges = 0
 
   for (const [key, obs] of observedEdges) {
@@ -100,6 +156,11 @@ export function reconcile(declared: Model, observed: Model): Drift {
       ignoredEdges++
       continue
     }
+    const gap = edgeCoverageGap(declared, declaredById, dec)
+    if (gap) {
+      unverifiableEdges.push({ edge: dec, ...gap })
+      continue
+    }
     removedEdges.push(dec)
   }
 
@@ -113,10 +174,42 @@ export function reconcile(declared: Model, observed: Model): Drift {
   return {
     entities: { added, removed, changed },
     edges: { added: addedEdges, removed: removedEdges },
+    // Not folded into hasDrift: a blind spot must never turn the CI gate red,
+    // or every run with read-only credentials fails and the gate gets muted.
+    unverifiable: { entities: unverifiableEntities, edges: unverifiableEdges },
     ignored: { entities: ignoredEntities, edges: ignoredEdges },
     coverage: declared.coverage,
     hasDrift,
   }
+}
+
+/**
+ * The declared-but-unobserved section, emitted whether or not there is drift —
+ * "no drift" alongside a dozen entities nobody could look at would be a claim
+ * the observation does not support.
+ */
+function formatUnverifiable(drift: Drift): string[] {
+  const { entities, edges } = drift.unverifiable
+  if (!entities.length && !edges.length) return []
+
+  const out = [
+    `### Declared, but not verifiable (${entities.length + edges.length})`,
+    '',
+    '_Inside a declared blind spot, so absence from the observation is unknown, not absent. Kept in the model rather than reported as removed._',
+    '',
+  ]
+  if (entities.length) {
+    out.push('| Entity | Blind spot | Why |', '|---|---|---|')
+    for (const u of entities) {
+      out.push(`| \`${u.entity.id}\` | \`${u.scope}\` | ${u.reason} |`)
+    }
+    out.push('')
+  }
+  for (const u of edges) {
+    out.push(`- \`${u.edge.from}\` -> \`${u.edge.to}\` - within \`${u.scope}\``)
+  }
+  if (edges.length) out.push('')
+  return out
 }
 
 /** Markdown, because the output's destination is a pull request body. */
@@ -126,6 +219,8 @@ export function formatDrift(drift: Drift): string {
     if (drift.ignored.entities || drift.ignored.edges) {
       parts.push(`\n_Ignored: ${drift.ignored.entities} entities, ${drift.ignored.edges} edges._`)
     }
+    const unverifiable = formatUnverifiable(drift)
+    if (unverifiable.length) parts.push('', ...unverifiable)
     return parts.join('\n')
   }
 
@@ -155,6 +250,7 @@ export function formatDrift(drift: Drift): string {
     for (const e of drift.edges.removed) out.push(`- **removed** \`${e.from}\` -> \`${e.to}\``)
     out.push('')
   }
+  out.push(...formatUnverifiable(drift))
   if (drift.ignored.entities || drift.ignored.edges) {
     out.push(`_Ignored by policy: ${drift.ignored.entities} entities, ${drift.ignored.edges} edges._`, '')
   }
