@@ -84,6 +84,7 @@ The only environment where Graphviz can't run is one with WebAssembly disabled (
 - **Runtime state never enters git.** Health, latency, error rates are render-time overlays only.
 - **Drift policy: structural facts count, metadata doesn't.** See `COMPARED_FIELDS` in `src/reconcile/index.ts`. Widening it has a real cost — noisy drift reports get muted, and a muted report equals no tool at all.
 - **Providers never do I/O outside `observe`.** Pure mapping functions (`importTerraformState`, `toModel`) stay separately exported and unit-tested without network or disk.
+- **Writing the model back edits the document, never regenerates it.** `applyDrift` (`src/model/apply.ts`) mutates the parsed YAML document in place, because its output is a pull request diff. `dumpModel` would produce a semantically identical file that drops every comment and reflows every block, which is how three real changes become a six-hundred-line diff nobody reviews. Three rules follow, all tested: only compared fields are written (hand-set `level`, hand-added `tags` survive); additions are inserted in sorted position with `localeCompare`, the ordering the importer uses, so a re-import reproduces the file; and the source's trailing-newline convention is preserved. The writer must also converge — reconciling its output reports no drift — or a scheduled job proposes the same pull request every morning.
 
 ## Identity resolution
 
@@ -120,5 +121,7 @@ npx tsx src/cli.ts engines     # what this machine can render with
 npx tsx src/cli.ts providers   # what is registered
 npm run docs                   # regenerate docs/ and the README's embedded render
 ```
+
+`examples/drift-pr.yml` is a workflow template people copy into their own repository, so CI is the only thing standing between a renamed CLI flag and a broken workflow everywhere it was copied. `test/docs.test.ts` asserts the flags it passes still exist.
 
 Run `npm run typecheck && npm test` before every commit. CI runs both, plus the drift gate, plus the docs freshness gate, plus one job asserting Graphviz works from a plain install with no `dot` on PATH, and another running `--jitless` to assert the Mermaid fallback.

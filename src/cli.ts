@@ -6,6 +6,7 @@ import { importTerraformState, parseTerraformState } from './providers/terraform
 import { providers } from './providers/index.js'
 import { render, renderers, resolveRenderer } from './render/index.js'
 import { formatDrift, reconcile } from './reconcile/index.js'
+import { applyDrift, formatApplySummary } from './model/apply.js'
 import { formatConflicts } from './model/merge.js'
 import { loadConfig, observeAll } from './config.js'
 import type { Model } from './model/schema.js'
@@ -17,14 +18,24 @@ program
   .description('Architecture as code, reconciled with live infrastructure.')
   .version('0.0.1')
 
-function requireModel(path: string): Model {
-  const result = loadModel(readFileSync(path, 'utf8'))
+/**
+ * The source text comes back alongside the parsed model because `--write-model`
+ * edits the YAML document rather than re-serializing it, to keep comments and
+ * formatting intact.
+ */
+function requireModelSource(path: string): { model: Model; source: string } {
+  const source = readFileSync(path, 'utf8')
+  const result = loadModel(source)
   for (const issue of result.issues) console.error(`${issue.severity}: ${issue.message}`)
   if (!result.ok || !result.model) {
     console.error(`\n${path} is not a valid model.`)
     process.exit(1)
   }
-  return result.model
+  return { model: result.model, source }
+}
+
+function requireModel(path: string): Model {
+  return requireModelSource(path).model
 }
 
 program
@@ -135,6 +146,10 @@ program
   .option('--terraform <state>', 'shorthand for a single Terraform state file')
   .option('--include-data-sources', 'include data sources as entities', false)
   .option('-o, --out <file>', 'write the markdown report to a file')
+  .option(
+    '--write-model <file>',
+    'write the reconciled model, preserving comments and hand-written blocks (pass the model\'s own path to update it in place)',
+  )
   .option('--exit-zero', 'always exit 0, even when drift is found', false)
   .action(
     async (
@@ -144,10 +159,11 @@ program
         terraform?: string
         includeDataSources: boolean
         out?: string
+        writeModel?: string
         exitZero: boolean
       },
     ) => {
-      const declared = requireModel(modelPath)
+      const { model: declared, source: declaredSource } = requireModelSource(modelPath)
 
       let observed: Model
       let conflictReport = ''
@@ -175,6 +191,27 @@ program
         console.error(`wrote ${opts.out}`)
       }
       console.log(report)
+
+      if (opts.writeModel) {
+        // Writing an unchanged file on every clean run would leave a scheduled
+        // job touching the model's mtime forever and, where the model is its
+        // own target, invite an empty commit.
+        if (!drift.hasDrift) {
+          console.error('no drift — model left unchanged')
+        } else {
+          const { yaml, summary } = applyDrift(declaredSource, drift)
+          const check = loadModel(yaml)
+          // A reconciled model that does not validate is a bug in this writer,
+          // and committing it would break every later run. Fail instead.
+          if (!check.ok) {
+            console.error('\nthe reconciled model is not valid — refusing to write it:')
+            for (const issue of check.issues) console.error(`  ${issue.severity}: ${issue.message}`)
+            process.exit(2)
+          }
+          writeFileSync(opts.writeModel, yaml)
+          console.error(`wrote ${opts.writeModel} — ${formatApplySummary(summary)}`)
+        }
+      }
 
       if (drift.hasDrift && !opts.exitZero) process.exit(1)
     },

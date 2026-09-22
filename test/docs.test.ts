@@ -28,3 +28,31 @@ describe('committed renders', () => {
     expect(once).toBe(twice)
   })
 })
+
+/**
+ * The drift-PR workflow is a template people copy. A renamed CLI flag would
+ * leave it broken in every repository that copied it, and nothing else in the
+ * suite would notice — the file is documentation as far as CI is concerned.
+ */
+describe('the drift pull request workflow template', () => {
+  const template = readFileSync(new URL('../examples/drift-pr.yml', import.meta.url), 'utf8')
+
+  it('uses flags the CLI actually has', () => {
+    const cli = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8')
+    for (const flag of ['--write-model', '--config', '--out', '--exit-zero']) {
+      expect(template).toContain(flag)
+      expect(cli, `the workflow template passes ${flag}, which the CLI no longer defines`).toContain(flag)
+    }
+  })
+
+  it('commits only the model, never the generated report', () => {
+    // `create-pull-request` commits every change in the tree by default, and
+    // the report is written next to it.
+    expect(template).toContain('add-paths: architecture.yaml')
+    expect(template).toContain('--out /tmp/drift-report.md')
+  })
+
+  it('reuses one branch, so a week of drift is one pull request', () => {
+    expect(template).toContain('branch: driftwood/drift')
+  })
+})
