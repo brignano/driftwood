@@ -102,6 +102,107 @@ describe('reconcile', () => {
     expect(report).toContain('Known coverage gaps')
     expect(report).toContain('read-only role cannot list secrets')
   })
+
+  // Unknown is not absent. A provider holding read-only credentials that cannot
+  // see a resource must never make the reconciler report it removed.
+  it('does not report a declared entity as removed when it sits in a blind spot', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_secretsmanager_*', reason: 'cannot list secrets' }],
+      entities: [{ id: 'aws_secretsmanager_secret.db', kind: 'aws_secretsmanager_secret' }],
+    })
+    const drift = reconcile(declared, model({}))
+    expect(drift.entities.removed).toHaveLength(0)
+    expect(drift.unverifiable.entities.map((u) => u.entity.id)).toEqual(['aws_secretsmanager_secret.db'])
+    expect(drift.unverifiable.entities[0]?.reason).toBe('cannot list secrets')
+  })
+
+  it('does not let a blind spot turn the drift gate red', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_secretsmanager_*', reason: 'cannot list secrets' }],
+      entities: [{ id: 'aws_secretsmanager_secret.db', kind: 'aws_secretsmanager_secret' }],
+    })
+    expect(reconcile(declared, model({})).hasDrift).toBe(false)
+  })
+
+  it('matches a coverage scope against an id as well as a kind', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_route53_record.*', reason: 'delegated zone' }],
+      entities: [{ id: 'aws_route53_record.apex', kind: 'aws_route53_record' }],
+    })
+    const drift = reconcile(declared, model({}))
+    expect(drift.entities.removed).toHaveLength(0)
+    expect(drift.unverifiable.entities).toHaveLength(1)
+  })
+
+  it('still reports a removal outside every declared blind spot', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_secretsmanager_*', reason: 'cannot list secrets' }],
+      entities: [{ id: 'aws_s3_bucket.uploads', kind: 'aws_s3_bucket' }],
+    })
+    const drift = reconcile(declared, model({}))
+    expect(drift.entities.removed.map((e) => e.id)).toEqual(['aws_s3_bucket.uploads'])
+    expect(drift.unverifiable.entities).toHaveLength(0)
+    expect(drift.hasDrift).toBe(true)
+  })
+
+  // A blind spot says "might not be seen", never "must not be reported" — a
+  // resource appearing inside one is newly visible, and suppressing it would
+  // lose a real resource.
+  it('still reports an addition inside a blind spot', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_secretsmanager_*', reason: 'cannot list secrets' }],
+    })
+    const observed = model({
+      entities: [{ id: 'aws_secretsmanager_secret.new', kind: 'aws_secretsmanager_secret' }],
+    })
+    const drift = reconcile(declared, observed)
+    expect(drift.entities.added.map((e) => e.id)).toEqual(['aws_secretsmanager_secret.new'])
+    expect(drift.hasDrift).toBe(true)
+  })
+
+  // The entity was observed, so the blind spot never applied to it.
+  it('still reports a field change on an entity inside a blind spot', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_secretsmanager_*', reason: 'cannot list secrets' }],
+      entities: [{ id: 'aws_secretsmanager_secret.db', kind: 'aws_secretsmanager_secret', name: 'old' }],
+    })
+    const observed = model({
+      entities: [{ id: 'aws_secretsmanager_secret.db', kind: 'aws_secretsmanager_secret', name: 'new' }],
+    })
+    const drift = reconcile(declared, observed)
+    expect(drift.entities.changed).toHaveLength(1)
+    expect(drift.entities.changed[0]?.field).toBe('name')
+  })
+
+  it('treats an edge touching a blind spot as unverifiable rather than removed', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_secretsmanager_*', reason: 'cannot list secrets' }],
+      entities: [
+        { id: 'aws_lambda_function.fn', kind: 'aws_lambda_function' },
+        { id: 'aws_secretsmanager_secret.db', kind: 'aws_secretsmanager_secret' },
+      ],
+      edges: [{ from: 'aws_lambda_function.fn', to: 'aws_secretsmanager_secret.db', kind: 'depends-on' }],
+    })
+    const observed = model({ entities: [{ id: 'aws_lambda_function.fn', kind: 'aws_lambda_function' }] })
+    const drift = reconcile(declared, observed)
+    expect(drift.edges.removed).toHaveLength(0)
+    expect(drift.unverifiable.edges).toHaveLength(1)
+    expect(drift.hasDrift).toBe(false)
+  })
+
+  // Intentional divergence is decided before visibility is considered, so an
+  // ignored entity stays a single ignored count rather than becoming an
+  // unverifiable row the reader has to reconcile with the ignore list.
+  it('counts an ignored entity as ignored even when it also sits in a blind spot', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_secretsmanager_*', reason: 'cannot list secrets' }],
+      ignore: { entities: ['aws_secretsmanager_secret.db'], kinds: [], edges: [] },
+      entities: [{ id: 'aws_secretsmanager_secret.db', kind: 'aws_secretsmanager_secret' }],
+    })
+    const drift = reconcile(declared, model({}))
+    expect(drift.ignored.entities).toBe(1)
+    expect(drift.unverifiable.entities).toHaveLength(0)
+  })
 })
 
 describe('formatDrift', () => {
@@ -112,5 +213,41 @@ describe('formatDrift', () => {
     expect(report).toContain('## Architecture drift detected')
     expect(report).toContain('`new`')
     expect(report).toContain('`gone`')
+  })
+
+  it('names the blind spot and the reason for every unverifiable entity', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_secretsmanager_*', reason: 'cannot list secrets' }],
+      entities: [
+        { id: 'aws_secretsmanager_secret.db', kind: 'aws_secretsmanager_secret' },
+        { id: 'aws_s3_bucket.uploads', kind: 'aws_s3_bucket' },
+      ],
+    })
+    const report = formatDrift(reconcile(declared, model({})))
+    expect(report).toContain('Declared, but not verifiable (1)')
+    expect(report).toContain('`aws_secretsmanager_secret.db`')
+    expect(report).toContain('cannot list secrets')
+    // The one genuine removal must still read as a removal.
+    expect(report).toContain('not found in infrastructure (1)')
+  })
+
+  // "No drift" next to entities nobody could look at would overclaim.
+  it('reports unverifiable entities even when there is no drift', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_secretsmanager_*', reason: 'cannot list secrets' }],
+      entities: [{ id: 'aws_secretsmanager_secret.db', kind: 'aws_secretsmanager_secret' }],
+    })
+    const report = formatDrift(reconcile(declared, model({})))
+    expect(report).toContain('No drift')
+    expect(report).toContain('Declared, but not verifiable (1)')
+  })
+
+  it('says nothing about verifiability when every declared entity was observed', () => {
+    const declared = model({
+      coverage: [{ scope: 'aws_secretsmanager_*', reason: 'cannot list secrets' }],
+      entities: [{ id: 'aws_secretsmanager_secret.db', kind: 'aws_secretsmanager_secret' }],
+    })
+    const report = formatDrift(reconcile(declared, declared))
+    expect(report).not.toContain('not verifiable')
   })
 })

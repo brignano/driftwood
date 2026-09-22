@@ -620,22 +620,6 @@
     },
     {
       "mode": "managed",
-      "type": "aws_secretsmanager_secret",
-      "name": "db_password",
-      "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",
-      "instances": [
-        {
-          "attributes": {
-            "name": "shop/prod/orders-db"
-          },
-          "dependencies": [
-            "aws_kms_key.data"
-          ]
-        }
-      ]
-    },
-    {
-      "mode": "managed",
       "type": "aws_iam_role",
       "name": "ecs_task_execution",
       "provider": "provider[\"registry.terraform.io/hashicorp/aws\"]",

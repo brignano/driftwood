@@ -117,3 +117,22 @@ jobs:
                --terraform examples/orders-platform.drifted.tfstate.json; then
             echo "expected drift to exit non-zero"; exit 1
           fi
+
+      # The drifted state omits a secret the CI role cannot list, exactly as a
+      # read-only observation would. Reporting that as a deletion would invite a
+      # pull request deleting a secret nobody deleted, so it is asserted rather
+      # than left to the unit tests alone.
+      - name: A declared blind spot must never be reported as a deletion
+        run: |
+          npx tsx src/cli.ts reconcile examples/architecture.yaml \
+            --terraform examples/orders-platform.drifted.tfstate.json \
+            --exit-zero -o /tmp/drift.md
+          removed=$(sed -n '/not found in infrastructure/,/^### /p' /tmp/drift.md)
+          # The genuinely deleted bucket must still read as deleted...
+          echo "$removed" | grep -q 'aws_s3_bucket.uploads'
+          # ...and the unobservable secret must not.
+          if echo "$removed" | grep -q 'aws_secretsmanager_secret.db_password'; then
+            echo "::error::an entity inside a declared coverage gap was reported as removed"
+            cat /tmp/drift.md; exit 1
+          fi
+          grep -q 'Declared, but not verifiable' /tmp/drift.md
