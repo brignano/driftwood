@@ -4,6 +4,8 @@ export { loadModel, dumpModel, validateModel, matches } from './model/validate.j
 export type { Issue, ValidationResult } from './model/validate.js'
 export { mergeModels, formatConflicts } from './model/merge.js'
 export type { MergeResult, MergeConflict, SourcedModel } from './model/merge.js'
+export { applyDrift, formatApplySummary } from './model/apply.js'
+export type { ApplySummary } from './model/apply.js'
 
 // Extension points
 export { Registry } from './registry.js'
