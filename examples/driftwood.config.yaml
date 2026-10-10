@@ -14,6 +14,18 @@ providers:
       statePath: ./orders-platform.tfstate.json
       includeDataSources: false
 
+  # The same state, fetched from a Terraform Cloud / HCP Terraform workspace
+  # instead of a local file — so a scheduled job needs only a read-only team
+  # token ("Read state versions"), not the state file or cloud credentials.
+  # Use one or the other for the same workspace, not both.
+  #
+  # - use: terraform-cloud
+  #   with:
+  #     organization: acme
+  #     workspace: prod-orders
+  #     tokenEnv: TFE_TOKEN             # the env var name, never the token
+  #     # address: https://tfe.corp.example   # Terraform Enterprise
+
   # Runtime source: what is *actually running*. Commented out because it needs
   # a live environment and a token; uncomment to reconcile intent against
   # reality rather than intent against itself. The `aliases` block in

@@ -112,8 +112,10 @@ program
   .command('providers')
   .description('List registered providers')
   .action(() => {
-    for (const p of providers.all()) {
-      console.log(`${p.name.padEnd(12)} ${p.kind.padEnd(12)} ${p.platforms.join(',').padEnd(14)} ${p.description}`)
+    const all = providers.all()
+    const width = Math.max(...all.map((p) => p.name.length)) + 1
+    for (const p of all) {
+      console.log(`${p.name.padEnd(width)} ${p.kind.padEnd(12)} ${p.platforms.join(',').padEnd(14)} ${p.description}`)
     }
   })
 
