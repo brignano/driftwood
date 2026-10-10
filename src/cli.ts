@@ -296,14 +296,4 @@ program
     },
   )
 
-/**
- * A provider that cannot answer throws, and the message is written for whoever
- * is reading a CI log — a stale observation, a token that is not set, a state
- * file that is not there. An unhandled rejection buries that message in a stack
- * trace from inside commander, so it is caught and printed plainly. The exit
- * code stays non-zero either way; what changes is whether the reason is legible.
- */
-program.parseAsync().catch((err: unknown) => {
-  console.error(err instanceof Error ? err.message : String(err))
-  process.exit(1)
-})
+program.parseAsync()
