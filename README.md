@@ -245,6 +245,50 @@ The bucket was deleted and is reported as deleted. The secret was not — the ro
 
 Exits **1** on drift and **0** when clean, so it works directly as a CI gate. Output is markdown because its destination is a pull request body.
 
+### Drift as a pull request
+
+A report someone has to go and read is a report nobody reads. `--write-model` writes what was observed back into the model, so the drift arrives as a diff a reviewer can approve:
+
+```bash
+npx tsx src/cli.ts reconcile examples/architecture.yaml \
+  --terraform examples/orders-platform.drifted.tfstate.json \
+  --write-model examples/architecture.yaml \
+  --exit-zero
+```
+
+```diff
+   - id: aws_db_instance.orders
+     kind: aws_db_instance
+-    name: shop-orders-prod
++    name: shop-orders-prod-v2
+     group: db
+
++  - id: aws_sqs_queue.payments
++    kind: aws_sqs_queue
++    name: shop-payments
++    group: sqs
++    platform: aws
++    source: terraform
++    level: container
+
+-  - id: aws_s3_bucket.uploads
+-    kind: aws_s3_bucket
+-    name: shop-example-com-uploads
+-    group: s3
+```
+<sub>Three of the nine hunks, each shown where it lands in the file.</sub>
+
+Forty-one changed lines out of six hundred, and every one of them is a fact about the infrastructure. That is deliberate, and it is most of the work:
+
+- **The YAML document is edited in place, not regenerated.** Re-serializing the parsed model would produce a semantically identical file that drops every comment and reflows every block — three real changes buried in a six-hundred-line diff. The comments in `architecture.yaml` sit above exactly the blocks no importer can infer, and are the reasoning a reviewer needs most.
+- **Only compared fields are written.** An entity may carry hand-added `tags` or a hand-set `level` that no provider knows about. A field the drift policy does not treat as drift is not the writer's to overwrite.
+- **New entries are inserted in sorted position**, using the same ordering the importer sorts with, so a later `import terraform` reproduces the file rather than reshuffling it.
+- **Nothing inside a declared blind spot is deleted.** The secret above stays exactly where it is.
+
+The written model is validated before it lands, and reconciling it again reports no drift — so a scheduled job converges instead of proposing the same pull request every morning.
+
+`examples/drift-pr.yml` is a workflow that does this on a schedule and opens the pull request. Copy it into `.github/workflows/`, point it at your model, and give it read-only infrastructure credentials. Its `contents: write` permission is for *this repository* — pushing a branch and opening a PR. driftwood never calls a mutating infrastructure API.
+
 ## Extensible by design
 
 Providers and renderers are both registries. A third-party plugin registers exactly the way a built-in does — there is no separate plugin API.
@@ -351,10 +395,12 @@ src/
   render/mermaid.ts      always available
   render/dot.ts          DOT source, always available
   render/graphviz.ts     SVG via native dot or WASM, with tier detection
+  model/apply.ts         writes observed drift back, preserving comments and hand edits
   reconcile/index.ts     declared vs observed -> drift report
   config.ts              driftwood.config.yaml
   cli.ts                 validate · render · engines · providers · import · reconcile
-examples/                a worked 45-resource AWS platform, a drifted copy, and a config
+examples/                a worked 45-resource AWS platform, a drifted copy, a config,
+                         and a drift-PR workflow to copy
 scripts/render-docs.ts   regenerates docs/ and the README's embedded render
 docs/                    committed renders of the example, kept current by CI
 .claude/skills/          add-provider and add-renderer walkthroughs for agents
@@ -363,7 +409,7 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 113 tests
+npm test        # 143 tests
 npm run typecheck
 npm run build
 ```
@@ -384,10 +430,11 @@ Built:
 - [x] Declarative `driftwood.config.yaml` wiring
 - [x] Reconciler with an explicit drift policy, wired as a CI gate
 - [x] Render-time health overlay for healthy, degraded, and down entities
+- [x] Blind spots suppress deletions — unknown is reported as unknown, never as absent
+- [x] Drift written back as a reviewable pull request, comments and hand edits intact
 
 Deliberately not built yet, roughly in order:
 
-- [ ] Open the drift report as an actual pull request, not just a CI failure
 - [ ] Live cloud API providers (AWS, GCP) to catch resources no IaC owns
 - [ ] A Splunk provider (the extension point is ready; no implementation shipped yet)
 - [ ] Preserve human/agent annotations across regeneration

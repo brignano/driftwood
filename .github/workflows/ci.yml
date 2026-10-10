@@ -136,3 +136,34 @@ jobs:
             cat /tmp/drift.md; exit 1
           fi
           grep -q 'Declared, but not verifiable' /tmp/drift.md
+
+      # A scheduled drift job writes the model back and opens a pull request.
+      # If writing the drift did not actually resolve it, that job proposes the
+      # same pull request every morning until someone mutes it.
+      - name: Writing drift back must resolve it, and must not touch anything else
+        run: |
+          cp examples/architecture.yaml /tmp/model.yaml
+          npx tsx src/cli.ts reconcile /tmp/model.yaml \
+            --terraform examples/orders-platform.drifted.tfstate.json \
+            --write-model /tmp/model.yaml --exit-zero
+          # Converged: reconciling the written model finds nothing.
+          npx tsx src/cli.ts reconcile /tmp/model.yaml \
+            --terraform examples/orders-platform.drifted.tfstate.json
+          # No churn: a converged model is left alone rather than rewritten,
+          # so the scheduled job stops proposing changes once it is caught up.
+          cp /tmp/model.yaml /tmp/model.once.yaml
+          npx tsx src/cli.ts reconcile /tmp/model.yaml \
+            --terraform examples/orders-platform.drifted.tfstate.json \
+            --write-model /tmp/model.yaml --exit-zero
+          diff -u /tmp/model.once.yaml /tmp/model.yaml
+          # The comments above the hand-written blocks are the reasoning a
+          # reviewer needs most, and a regenerated file would drop all of them.
+          grep -q 'Cross-source identity is explicit, never guessed' /tmp/model.yaml
+          grep -q 'Declared blind spots' /tmp/model.yaml
+          # The blind-spot secret is still there; the deleted bucket is not.
+          grep -q 'aws_secretsmanager_secret.db_password' /tmp/model.yaml
+          if grep -q 'aws_s3_bucket.uploads' /tmp/model.yaml; then
+            echo "::error::a genuinely deleted resource survived the write-back"; exit 1
+          fi
+          # The written model must still be a valid model.
+          npx tsx src/cli.ts validate /tmp/model.yaml
