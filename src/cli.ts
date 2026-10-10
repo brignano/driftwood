@@ -217,4 +217,18 @@ program
     },
   )
 
-program.parseAsync()
+/**
+ * Every provider that cannot answer throws, and the messages are written for
+ * whoever is reading a CI log — a state file that is not there, a token that is
+ * not set, a config that does not parse. `parseAsync` returns a promise nothing
+ * was handling, so those arrived as an unhandled rejection: twenty lines of
+ * stack from inside `node:fs` or commander, with the one useful sentence
+ * somewhere in the middle.
+ *
+ * The exit code was already non-zero and still is. What changes is whether the
+ * reason is legible, which is the whole point of writing the messages carefully.
+ */
+program.parseAsync().catch((err: unknown) => {
+  console.error(err instanceof Error ? err.message : String(err))
+  process.exit(1)
+})
