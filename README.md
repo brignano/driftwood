@@ -455,7 +455,7 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 175 tests
+npm test        # 178 tests
 npm run typecheck
 npm run build
 ```
