@@ -167,3 +167,55 @@ jobs:
           fi
           # The written model must still be a valid model.
           npx tsx src/cli.ts validate /tmp/model.yaml
+
+      # Capturing an observation in one place and reconciling it in another is
+      # the integration that lets the deploy pipeline and the model live in
+      # different repositories, so the whole round trip is asserted, not just
+      # its halves.
+      - name: An observation must survive the trip between machines
+        run: |
+          npx tsx src/cli.ts observe \
+            --terraform examples/orders-platform.drifted.tfstate.json \
+            --model examples/architecture.yaml \
+            --origin workspace=ci --origin commit=${{ github.sha }} \
+            -o /tmp/observation.json
+          # Provenance is what makes a drift PR from another system reviewable.
+          grep -q '"workspace": "ci"' /tmp/observation.json
+          grep -q '"observedAt"' /tmp/observation.json
+
+          # Paths in a config resolve against the config's own directory, so
+          # `observation.json` here means /tmp/observation.json.
+          printf '%s\n' \
+            'providers:' \
+            '  - use: observation' \
+            '    with:' \
+            '      path: observation.json' \
+            '      maxAgeMinutes: 1440' \
+            > /tmp/observe.config.yaml
+
+          # Reconciling the artifact must find exactly the drift the state file
+          # does — the trip through the envelope changes nothing.
+          npx tsx src/cli.ts reconcile examples/architecture.yaml \
+            -c /tmp/observe.config.yaml --exit-zero -o /tmp/via-observation.md
+          npx tsx src/cli.ts reconcile examples/architecture.yaml \
+            --terraform examples/orders-platform.drifted.tfstate.json \
+            --exit-zero -o /tmp/direct.md
+          diff -u /tmp/direct.md /tmp/via-observation.md
+
+      # The failure mode that makes the push pattern dangerous: the pipeline
+      # stops publishing, the consumer keeps reading, and everything deployed
+      # since reads as a deletion. Refusing must be loud, not best-effort.
+      - name: A stale observation must be refused, not reconciled against
+        run: |
+          node -e "
+            const fs = require('node:fs')
+            const o = JSON.parse(fs.readFileSync('/tmp/observation.json', 'utf8'))
+            o.observedAt = new Date(Date.now() - 9 * 864e5).toISOString()
+            fs.writeFileSync('/tmp/stale.json', JSON.stringify(o))
+          "
+          sed 's#path: observation.json#path: stale.json#' /tmp/observe.config.yaml > /tmp/stale.config.yaml
+          if npx tsx src/cli.ts reconcile examples/architecture.yaml -c /tmp/stale.config.yaml --exit-zero; then
+            echo "::error::a stale observation was accepted"; exit 1
+          fi
+          npx tsx src/cli.ts reconcile examples/architecture.yaml -c /tmp/stale.config.yaml --exit-zero 2>&1 \
+            | grep -q "older than the 1440-minute limit"

@@ -42,6 +42,15 @@ export interface LoadedConfig {
   baseDir: string
 }
 
+/**
+ * The merge, plus what went into it. `observe` needs the per-provider counts to
+ * record in the observation envelope, so a consumer can see a thin observation
+ * as thin rather than mistaking it for a shrunken estate.
+ */
+export interface ObserveResult extends MergeResult {
+  sources: SourcedModel[]
+}
+
 export function loadConfig(source: string, path: string): LoadedConfig {
   const raw = parseYaml(source)
   const parsed = Config.safeParse(raw)
@@ -72,7 +81,7 @@ export async function observeAll(
   loaded: LoadedConfig,
   declared: Model,
   log: (m: string) => void = () => {},
-): Promise<MergeResult> {
+): Promise<ObserveResult> {
   const ctx = makeContext(loaded.baseDir, log)
 
   const results = await Promise.all(
@@ -94,5 +103,5 @@ export async function observeAll(
     throw new Error('no providers configured — add at least one entry under `providers:`')
   }
 
-  return mergeModels(results, declared.aliases)
+  return { ...mergeModels(results, declared.aliases), sources: results }
 }

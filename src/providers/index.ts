@@ -2,6 +2,7 @@ import { Registry } from '../registry.js'
 import type { Provider } from './types.js'
 import { terraformProvider } from './terraform.js'
 import { dynatraceProvider } from './dynatrace.js'
+import { observationProvider } from './observation.js'
 
 /**
  * Built-in providers. Third parties register their own against the same
@@ -10,7 +11,8 @@ import { dynatraceProvider } from './dynatrace.js'
 export const providers = new Registry<Provider>('provider')
 providers.register(terraformProvider as unknown as Provider)
 providers.register(dynatraceProvider as unknown as Provider)
+providers.register(observationProvider as unknown as Provider)
 
-export { terraformProvider, dynatraceProvider }
+export { terraformProvider, dynatraceProvider, observationProvider }
 export type { Provider, ProviderContext, ProviderKind } from './types.js'
 export { defineProvider } from './types.js'

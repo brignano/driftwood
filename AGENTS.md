@@ -84,6 +84,7 @@ The only environment where Graphviz can't run is one with WebAssembly disabled (
 - **Runtime state never enters git.** Health, latency, error rates are render-time overlays only.
 - **Drift policy: structural facts count, metadata doesn't.** See `COMPARED_FIELDS` in `src/reconcile/index.ts`. Widening it has a real cost — noisy drift reports get muted, and a muted report equals no tool at all.
 - **Providers never do I/O outside `observe`.** Pure mapping functions (`importTerraformState`, `toModel`) stay separately exported and unit-tested without network or disk.
+- **An observation crossing machines carries its own age.** `src/model/observation.ts` wraps a `Model` in an envelope with `observedAt`, per-provider counts and free-form `origin`, because the machine that deploys is usually not the machine that holds the model. A bare model says nothing about when it was true, and a stale one reaching the reconciler reads as mass deletion — the same hazard as a coverage gap, by a different route. So the `observation` provider refuses an artifact past `maxAgeMinutes`, and refuses a future-dated one rather than treating clock skew as fact. It throws rather than returning a partial model, matching `observeAll`: a provider that cannot answer aborts the run. Provider disagreements are deliberately *not* in the envelope — they describe the observing run, and carrying them would mean a second hand-written copy of `MergeConflict`'s shape.
 - **Writing the model back edits the document, never regenerates it.** `applyDrift` (`src/model/apply.ts`) mutates the parsed YAML document in place, because its output is a pull request diff. `dumpModel` would produce a semantically identical file that drops every comment and reflows every block, which is how three real changes become a six-hundred-line diff nobody reviews. Three rules follow, all tested: only compared fields are written (hand-set `level`, hand-added `tags` survive); additions are inserted in sorted position with `localeCompare`, the ordering the importer uses, so a re-import reproduces the file; and the source's trailing-newline convention is preserved. The writer must also converge — reconciling its output reports no drift — or a scheduled job proposes the same pull request every morning.
 
 ## Identity resolution
@@ -119,6 +120,7 @@ npm run build
 npx tsx src/cli.ts <command>   # run without building
 npx tsx src/cli.ts engines     # what this machine can render with
 npx tsx src/cli.ts providers   # what is registered
+npx tsx src/cli.ts observe     # capture an observation to reconcile elsewhere
 npm run docs                   # regenerate docs/ and the README's embedded render
 ```
 

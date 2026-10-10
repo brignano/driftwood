@@ -56,3 +56,34 @@ describe('the drift pull request workflow template', () => {
     expect(template).toContain('branch: driftwood/drift')
   })
 })
+
+/**
+ * The publishing half, for the case where the deploy runs somewhere the model
+ * is not. Copied the same way, so stale just as easily.
+ */
+describe('the observation publishing template', () => {
+  const template = readFileSync(new URL('../examples/observe-publish.yml', import.meta.url), 'utf8')
+
+  it('uses flags the CLI actually has', () => {
+    const cli = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8')
+    for (const flag of ['--terraform', '--origin', '-o']) {
+      expect(template).toContain(flag)
+      expect(cli, `the template passes ${flag}, which the CLI no longer defines`).toContain(flag)
+    }
+    expect(template).toContain('driftwood observe')
+  })
+
+  it('records provenance, without which a cross-repository drift PR is unreviewable', () => {
+    expect(template).toMatch(/--origin workspace=/)
+    expect(template).toMatch(/--origin commit=/)
+  })
+
+  it('tells the consumer to set a staleness limit', () => {
+    expect(template).toContain('maxAgeMinutes')
+  })
+
+  it('asks for no write permission — it only reads and uploads', () => {
+    expect(template).toContain('contents: read')
+    expect(template).not.toContain('contents: write')
+  })
+})

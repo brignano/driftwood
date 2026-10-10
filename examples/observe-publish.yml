@@ -1,0 +1,84 @@
+# Publishes an observation from the pipeline that deploys.
+#
+# The companion to `drift-pr.yml`, for the common case where the machine that
+# runs Terraform is not the machine that holds the architecture model —
+# Harness, Jenkins, Spinnaker, a Terraform Cloud run task. This half runs
+# *after a deploy*, where the state and the credentials already are. The model's
+# own repository then reconciles against the artifact and needs no
+# infrastructure credentials at all.
+#
+# This file is GitHub Actions because that is what the rest of the examples
+# use, but nothing here is Actions-specific: the two steps are
+# `driftwood observe` and "put the file somewhere the other repo can read it".
+# In Harness or Jenkins it is the same two steps in that system's syntax.
+
+name: Publish architecture observation
+
+on:
+  workflow_run:
+    # Keyed to the deploy finishing, not to a schedule: the point of this half
+    # is that the observation is taken when the state is freshly true.
+    workflows: ['Deploy infrastructure']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g @brignano/driftwood
+
+      # Read-only, as always. For AWS that is a ReadOnlyAccess-shaped role.
+      # - uses: aws-actions/configure-aws-credentials@v4
+      #   with:
+      #     role-to-assume: ${{ secrets.DRIFTWOOD_READONLY_ROLE }}
+      #     aws-region: us-east-1
+
+      - name: Capture what is actually deployed
+        run: |
+          terraform show -json > /tmp/state.json
+          driftwood observe \
+            --terraform /tmp/state.json \
+            --origin workspace=prod-orders \
+            --origin commit=${{ github.sha }} \
+            --origin run=${{ github.run_id }} \
+            -o observation.json
+        # `--origin` is the part worth getting right. A drift pull request
+        # opened in another repository is unreviewable without knowing which
+        # workspace and which commit the facts came from. Add whatever your
+        # pipeline knows; the keys are free-form.
+        #
+        # Add `--model architecture.yaml` if this checkout has the committed
+        # model and several providers describe the same entities — the merge
+        # needs its `aliases` to join them, and will not guess.
+
+      # Hand it to whoever reconciles. An artifact is the simplest option and
+      # needs no extra credentials; an S3 bucket or an artifact repository works
+      # the same way, and is what you want when the consumer is in another
+      # GitHub organization or another SCM entirely.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: architecture-observation
+          path: observation.json
+          retention-days: 7
+
+      # Then, in the repository holding the model, consume it with:
+      #
+      #   providers:
+      #     - use: observation
+      #       with:
+      #         path: observation.json
+      #         maxAgeMinutes: 1440
+      #
+      # Set `maxAgeMinutes` on anything running to a schedule. If this job stops
+      # publishing and the consumer keeps reading the last artifact, every
+      # resource deployed since looks like a deletion — so driftwood refuses a
+      # stale observation rather than reconciling against it.
