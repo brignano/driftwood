@@ -348,7 +348,21 @@ It makes three read-only calls: resolve the workspace, read its current state ve
 
 There is no `maxAgeMinutes` here, on purpose. The current state version is read live, so it is as fresh as the call. Its age only tells you when someone last applied, and a workspace nobody has touched in a month still describes what exists. A workspace with no state at all is refused rather than read as empty. An empty answer would reach the reconciler as a mass deletion.
 
-**Still missing:** an S3 backend by bucket and key, and a live cloud API by account. A live cloud API would also catch changes made outside Terraform entirely.
+The same works for state in an S3 backend, or in S3-compatible storage such as MinIO or R2:
+
+```yaml
+providers:
+  - use: terraform-s3
+    with:
+      bucket: acme-tfstate
+      key: prod/orders.tfstate
+      region: eu-west-1
+      # workspace: staging   # read from env:/staging/prod/orders.tfstate, as the backend stores it
+```
+
+It needs `s3:GetObject` on that one object, plus `kms:Decrypt` if the bucket uses a customer-managed key. Credentials come from `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN`. GitHub's OIDC role action and CI credential bindings already set those. With a profile or SSO, `aws configure export-credentials --format env` exports them. There is no AWS SDK: the request is signed with SigV4 using `node:crypto`, so the dependency table above still holds. The trade-off is that driftwood does not walk the full credential chain itself.
+
+**Still missing:** a live cloud API by account. It would catch changes made outside Terraform entirely.
 
 ## Extensible by design
 
@@ -360,6 +374,7 @@ Providers and renderers are both registries. A third-party plugin registers exac
 |---|---|---|---|
 | `terraform` | declarative | **any** (AWS, GCP, Azure, vSphere, on-prem) | built in |
 | `terraform-cloud` | declarative | **any** — a Terraform Cloud / HCP Terraform / Enterprise workspace, fetched by name | built in |
+| `terraform-s3` | declarative | **any** — state in an S3 or S3-compatible backend, fetched by bucket and key | built in |
 | `dynatrace` | runtime | aws, gcp, azure, onprem, kubernetes | built in |
 | Splunk, cloud APIs, OTel, Kubernetes | — | — | extension point ready |
 
