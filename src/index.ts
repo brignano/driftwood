@@ -6,10 +6,20 @@ export { mergeModels, formatConflicts } from './model/merge.js'
 export type { MergeResult, MergeConflict, SourcedModel } from './model/merge.js'
 export { applyDrift, formatApplySummary } from './model/apply.js'
 export type { ApplySummary } from './model/apply.js'
+export {
+  Observation,
+  ObservationSource,
+  toObservation,
+  parseObservation,
+  dumpObservation,
+  ageInMinutes,
+  formatObservation,
+} from './model/observation.js'
+export type { ObservationResult } from './model/observation.js'
 
 // Extension points
 export { Registry } from './registry.js'
-export { providers, defineProvider, terraformProvider, dynatraceProvider } from './providers/index.js'
+export { providers, defineProvider, terraformProvider, dynatraceProvider, observationProvider } from './providers/index.js'
 export type { Provider, ProviderContext, ProviderKind } from './providers/index.js'
 export { renderers, render, resolveRenderer } from './render/index.js'
 export { defineRenderer } from './render/types.js'
@@ -27,7 +37,7 @@ export { renderMermaid } from './render/mermaid.js'
 // reachable from the package entry point, not just from inside the repo.
 // The marker/injection mechanism stays internal: it is a private contract
 // between `renderDot` and the Graphviz renderer, not API to build on.
-export { iconFor, familyFor, styleFor, iconSvg, ICONS, PALETTE, ICON_SIZE } from './render/icons.js'
+export { iconFor, familyFor, styleFor, kindLabel, iconSvg, ICONS, PALETTE, ICON_SIZE } from './render/icons.js'
 export type { IconKey, Family, FamilyStyle } from './render/icons.js'
 export { renderDot } from './render/dot.js'
 export { renderGraphvizSvg, detectTier, probeNativeDot } from './render/graphviz.js'
@@ -46,6 +56,6 @@ export type {
 
 // Config
 export { loadConfig, observeAll, makeContext, Config } from './config.js'
-export type { LoadedConfig } from './config.js'
+export type { LoadedConfig, ObserveResult } from './config.js'
 export { parseHealthMap, loadHealthMap, unknownHealthIds, HealthStatus } from './health.js'
 export type { HealthMap } from './health.js'

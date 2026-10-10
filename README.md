@@ -126,6 +126,8 @@ npx tsx src/cli.ts render examples/architecture.yaml --view app -o app.svg
 
 Nodes are drawn with a category icon, the entity name, and its `kind` underneath. The icons are **drawn in this repo and chosen by category** — database, queue, load balancer — not by vendor: no icon pack to install, nothing to license, and one glyph that fits an RDS instance, a Cloud SQL instance and an on-prem Postgres alike. Colour groups the categories into families (edge, compute, data, messaging, security), so a diagram reads as a few zones instead of thirty unrelated boxes. Use `--no-icons` for plain boxes.
 
+Being chosen by category rather than vendor is also what makes a mixed estate work without new rules: `AWS::ECS::Service` from CloudFormation, `google_sql_database_instance`, and an on-prem Postgres all classify correctly. Where an entity's `platform` is not already obvious from its `kind`, it appears on that second line — a Dynatrace `SERVICE` draws as `SERVICE · aws`, while `aws_s3_bucket` on platform `aws` is left alone rather than repeating itself.
+
 The icons are inlined into the SVG rather than handed to Graphviz as `image=` attributes, because the native `dot` binary resolves those as filesystem paths — a `data:` URI would work on the WASM tier and break on the native one. Post-processing the SVG means both tiers draw the same picture, and the result stays self-contained — no external references, no base64 bloat.
 
 Every image in this README is generated from `examples/architecture.yaml` by `npm run docs`, and CI re-runs it and fails if the result differs from what is committed. A stale picture of your own output is worse than no picture, so the renders are checked against their source rather than trusted — the drift gate's own argument, one level up.
@@ -289,6 +291,48 @@ The written model is validated before it lands, and reconciling it again reports
 
 `examples/drift-pr.yml` is a workflow that does this on a schedule and opens the pull request. Copy it into `.github/workflows/`, point it at your model, and give it read-only infrastructure credentials. Its `contents: write` permission is for *this repository* — pushing a branch and opening a PR. driftwood never calls a mutating infrastructure API.
 
+### When the deploy happens somewhere else
+
+The machine that runs Terraform is usually not the machine that holds the architecture model — Harness or Jenkins drives the apply, the model lives in a repository the developers own, and the people doing each are different people. `observe` splits reconciliation across that boundary:
+
+```bash
+# In the pipeline, after a deploy: capture what is actually out there.
+driftwood observe --terraform /tmp/state.json \
+  --origin workspace=prod-orders --origin commit=$GIT_SHA \
+  -o observation.json
+```
+
+```
+wrote observation.json — Observed 46 entities, 66 edges · 0 minutes ago · via terraform (46/66)
+workspace=prod-orders · commit=abc1234 · pipeline=harness-4821
+```
+
+```yaml
+# In the model's repository: reconcile against the artifact.
+providers:
+  - use: observation
+    with:
+      path: observation.json
+      maxAgeMinutes: 1440
+```
+
+The model's repository needs **no infrastructure credentials at all**, and the cloud account need not be reachable from it. The observation is taken where the state and the credentials already are, at the moment it is freshly true.
+
+Two details carry the weight:
+
+- **It is an envelope, not a bare model.** A bare model carries no indication of when it was true. `observedAt`, the per-provider counts, and the free-form `origin` are what make the artifact traceable — a drift pull request opened from another system is unreviewable without knowing which workspace and which commit produced it.
+- **`maxAgeMinutes` is the one setting you should not skip** on anything scheduled. If the pipeline stops publishing and the consumer keeps reading the last artifact, every resource deployed since reads as a deletion. driftwood refuses instead:
+
+```
+observation.json was observed 12960 minutes ago, older than the 1440-minute limit.
+Reconciling against a stale observation would report everything deployed since as
+removed. Check that the pipeline publishing it is still running.
+```
+
+A future-dated artifact is refused the same way, rather than treating clock skew as fact. `examples/observe-publish.yml` is the publishing half; nothing in it is GitHub-specific beyond the syntax.
+
+**Still missing:** the observation has to be taken somewhere that can see the state. Fetching it remotely — a Terraform Cloud workspace by name, an S3 backend by bucket and key, a live cloud API by account — is the next step, and is what would let the model's repository pull on a schedule rather than wait to be pushed to.
+
 ## Extensible by design
 
 Providers and renderers are both registries. A third-party plugin registers exactly the way a built-in does — there is no separate plugin API.
@@ -389,6 +433,7 @@ src/
   providers/types.ts     the provider extension point
   providers/terraform.ts declarative — any platform Terraform manages
   providers/dynatrace.ts runtime — Smartscape topology, read-only
+  providers/observation.ts an observation captured elsewhere, with a staleness guard
   render/types.ts        the renderer extension point (probe + render)
   render/select.ts       shared view scoping
   render/icons.ts        category icons, the kind -> icon/colour table, SVG injection
@@ -396,11 +441,12 @@ src/
   render/dot.ts          DOT source, always available
   render/graphviz.ts     SVG via native dot or WASM, with tier detection
   model/apply.ts         writes observed drift back, preserving comments and hand edits
+  model/observation.ts   the observe/consume envelope, with provenance and an age
   reconcile/index.ts     declared vs observed -> drift report
   config.ts              driftwood.config.yaml
-  cli.ts                 validate · render · engines · providers · import · reconcile
+  cli.ts                 validate · render · engines · providers · import · observe · reconcile
 examples/                a worked 45-resource AWS platform, a drifted copy, a config,
-                         and a drift-PR workflow to copy
+                         and two workflows to copy (drift-PR, observe-publish)
 scripts/render-docs.ts   regenerates docs/ and the README's embedded render
 docs/                    committed renders of the example, kept current by CI
 .claude/skills/          add-provider and add-renderer walkthroughs for agents
@@ -409,7 +455,7 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 146 tests
+npm test        # 178 tests
 npm run typecheck
 npm run build
 ```
@@ -432,6 +478,7 @@ Built:
 - [x] Render-time health overlay for healthy, degraded, and down entities
 - [x] Blind spots suppress deletions — unknown is reported as unknown, never as absent
 - [x] Drift written back as a reviewable pull request, comments and hand edits intact
+- [x] `observe` splits capture from reconciliation, so the deploy and the model can live apart
 
 Deliberately not built yet, roughly in order:
 

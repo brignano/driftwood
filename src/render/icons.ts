@@ -257,7 +257,13 @@ const KIND_ICONS: Array<[RegExp, IconKey]> = [
   rule(`sqs|queue|kinesis|kafka|rabbit|stream|${tok('msk')}`, 'queue'),
   rule('sns|topic|pubsub|subscription|notification', 'topic'),
   rule(`smtp|email|sendgrid|${tok('ses|mail')}`, 'email'),
-  rule(`task_?definition|container|docker|image|${tok('ecr|pod|pods')}`, 'container'),
+  // Artifact registries classify as containers, matching ECR, which already
+  // did. A registry is arguably its own category rather than a container, but
+  // splitting it means a new glyph *and* moving ECR, and one category drawn two
+  // ways across engines is the thing this table exists to prevent. Nexus and
+  // GAR land where ECR already lives; `*_container_registry` needs no rule
+  // because `container` matches it already.
+  rule(`task_?definition|container|docker|image|artifact_?registry|nexus|${tok('ecr|pod|pods')}`, 'container'),
   rule(`cluster|node_?group|node_?pool|${tok('eks|gke|aks')}`, 'cluster'),
   rule('lambda|function|serverless', 'function'),
   rule(
@@ -285,6 +291,31 @@ export function familyFor(kind: string): Family {
 
 export function styleFor(kind: string): FamilyStyle {
   return PALETTE[familyFor(kind)]
+}
+
+/**
+ * The muted second line under an entity's name.
+ *
+ * `platform` is carried on every entity but was drawn by nothing, so a diagram
+ * of an estate spanning two clouds could not say which cloud a node was in.
+ * It is shown only when the kind does not already say it: a Terraform entity is
+ * `aws_s3_bucket` on platform `aws`, where a suffix is pure noise, while a
+ * Dynatrace entity is `SERVICE` on platform `aws`, where it is the only
+ * indication of where the thing runs. The check is a plain substring on
+ * alphanumerics, which is enough because the Terraform importer derives both
+ * the platform and the kind prefix from the same provider name — `google`
+ * entities report platform `google`, not `gcp`.
+ *
+ * Shared, like every other classification here, because a node labelled `aws`
+ * in one engine and not in another means the pictures no longer describe the
+ * same system.
+ */
+export function kindLabel(kind: string, platform?: string): string {
+  if (!platform) return kind
+  const strip = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
+  const token = strip(platform)
+  if (!token || strip(kind).includes(token)) return kind
+  return `${kind} · ${platform}`
 }
 
 /**

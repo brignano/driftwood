@@ -7,6 +7,9 @@ import { providers } from './providers/index.js'
 import { render, renderers, resolveRenderer } from './render/index.js'
 import { formatDrift, reconcile } from './reconcile/index.js'
 import { applyDrift, formatApplySummary } from './model/apply.js'
+import { dumpObservation, formatObservation, toObservation } from './model/observation.js'
+import { emptyModel } from './model/schema.js'
+import type { SourcedModel } from './model/merge.js'
 import { formatConflicts } from './model/merge.js'
 import { loadConfig, observeAll } from './config.js'
 import type { Model } from './model/schema.js'
@@ -137,6 +140,82 @@ importCmd
       process.stdout.write(yaml)
     }
   })
+
+/**
+ * `--origin key=value`, repeatable. Provenance is the thing a reviewer wants
+ * most when a drift pull request arrives from a pipeline they do not run.
+ */
+function collectOrigin(pair: string, acc: Record<string, string>): Record<string, string> {
+  const at = pair.indexOf('=')
+  if (at < 1) {
+    console.error(`--origin expects key=value, got '${pair}'`)
+    process.exit(2)
+  }
+  acc[pair.slice(0, at)] = pair.slice(at + 1)
+  return acc
+}
+
+program
+  .command('observe')
+  .description('Run providers and emit what they saw, to reconcile elsewhere')
+  .option('-c, --config <file>', 'driftwood.config.yaml describing the providers to observe with')
+  .option('--terraform <state>', 'shorthand for a single Terraform state file')
+  .option('--include-data-sources', 'include data sources as entities', false)
+  .option(
+    '--model <file>',
+    'committed model, read only for its `aliases` — supply it when several providers describe the same thing',
+  )
+  .option('--origin <key=value>', 'provenance to record, repeatable (workspace, commit, pipeline run)', collectOrigin, {})
+  .option('-o, --out <file>', 'write the observation to a file instead of stdout (.json for JSON)')
+  .action(
+    async (opts: {
+      config?: string
+      terraform?: string
+      includeDataSources: boolean
+      model?: string
+      origin: Record<string, string>
+      out?: string
+    }) => {
+      // Aliases live in the committed model, which the machine running a deploy
+      // usually does not have. Without them the merge keeps each source's
+      // native ids apart, which is the safe default — never guess identity.
+      const aliasSource = opts.model ? requireModel(opts.model) : emptyModel('observed')
+
+      let model: Model
+      let sources: SourcedModel[]
+
+      if (opts.config) {
+        const loaded = loadConfig(readFileSync(opts.config, 'utf8'), opts.config)
+        const observed = await observeAll(loaded, aliasSource, (m) => console.error(m))
+        model = observed.model
+        sources = observed.sources
+        const conflicts = formatConflicts(observed.conflicts)
+        // Printed, not carried in the envelope: a disagreement is a fact about
+        // this run, and the resolution is already baked into the model.
+        if (conflicts) console.error(`\n${conflicts}`)
+      } else if (opts.terraform) {
+        const state = parseTerraformState(readFileSync(opts.terraform, 'utf8'))
+        model = importTerraformState(state, {
+          modelName: aliasSource.name,
+          includeDataSources: opts.includeDataSources,
+        })
+        sources = [{ provider: 'terraform', kind: 'declarative', model }]
+      } else {
+        console.error('provide either --config <file> or --terraform <state>')
+        process.exit(2)
+      }
+
+      const observation = toObservation(model, sources, opts.origin)
+      const serialized = dumpObservation(observation, opts.out?.endsWith('.json') ? 'json' : 'yaml')
+
+      if (opts.out) {
+        writeFileSync(opts.out, serialized)
+        console.error(`wrote ${opts.out} — ${formatObservation(observation)}`)
+      } else {
+        process.stdout.write(serialized)
+      }
+    },
+  )
 
 program
   .command('reconcile')

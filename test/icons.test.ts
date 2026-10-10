@@ -10,6 +10,7 @@ import {
   familyFor,
   iconFor,
   injectIcons,
+  kindLabel,
   marker,
 } from '../src/render/icons.js'
 
@@ -213,5 +214,62 @@ describe('renderMermaid families', () => {
     const m = model({ entities: [{ id: 'a', kind: 'aws_db_instance' }] })
     const out = renderMermaid(m, { health: { a: 'down' } })
     expect(out.indexOf('class n_a f_data;')).toBeLessThan(out.indexOf('class n_a down;'))
+  })
+})
+
+describe('iconFor, artifact registries', () => {
+  // ECR already classified as a container; Nexus and GAR now land in the same
+  // place rather than falling through to the generic glyph.
+  it.each([
+    'aws_ecr_repository',
+    'google_artifact_registry_repository',
+    'nexus_repository',
+    'google_container_registry',
+    'azurerm_container_registry',
+  ])('classifies %s as a container', (kind) => {
+    expect(iconFor(kind)).toBe('container')
+  })
+
+  // `tok()` guards on non-alphanumerics, so the `ecr` token must not match
+  // inside "secret" — which would otherwise steal every secret from its own
+  // rule, since the container rule is checked first.
+  it('does not let the ecr token match inside a secret', () => {
+    expect(iconFor('aws_secretsmanager_secret')).toBe('secret')
+    expect(iconFor('google_secret_manager_secret')).toBe('secret')
+  })
+})
+
+describe('kindLabel', () => {
+  it('omits a platform the kind already states', () => {
+    expect(kindLabel('aws_s3_bucket', 'aws')).toBe('aws_s3_bucket')
+    expect(kindLabel('google_storage_bucket', 'google')).toBe('google_storage_bucket')
+    expect(kindLabel('AWS::S3::Bucket', 'aws')).toBe('AWS::S3::Bucket')
+  })
+
+  it('shows a platform the kind does not state — the case that motivated it', () => {
+    // A Dynatrace entity is `SERVICE`; without this the picture cannot say
+    // which cloud it runs in.
+    expect(kindLabel('SERVICE', 'aws')).toBe('SERVICE · aws')
+    expect(kindLabel('HOST', 'onprem')).toBe('HOST · onprem')
+    expect(kindLabel('k8s_deployment', 'kubernetes')).toBe('k8s_deployment · kubernetes')
+  })
+
+  it('leaves the kind alone when there is no platform', () => {
+    expect(kindLabel('aws_s3_bucket')).toBe('aws_s3_bucket')
+    expect(kindLabel('aws_s3_bucket', '')).toBe('aws_s3_bucket')
+  })
+
+  it('both engines draw the same line, or the pictures stop describing one system', () => {
+    const m = model({
+      entities: [
+        { id: 'svc', kind: 'SERVICE', name: 'orders-api', platform: 'aws' },
+        { id: 'bucket', kind: 'aws_s3_bucket', name: 'uploads', platform: 'aws' },
+      ],
+    })
+    for (const out of [renderDot(m, {}), renderMermaid(m)]) {
+      expect(out).toContain('SERVICE · aws')
+      // ...and the redundant one stays redundant-free in both.
+      expect(out).not.toContain('aws_s3_bucket · aws')
+    }
   })
 })
