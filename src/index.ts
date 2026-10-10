@@ -37,7 +37,7 @@ export { renderMermaid } from './render/mermaid.js'
 // reachable from the package entry point, not just from inside the repo.
 // The marker/injection mechanism stays internal: it is a private contract
 // between `renderDot` and the Graphviz renderer, not API to build on.
-export { iconFor, familyFor, styleFor, iconSvg, ICONS, PALETTE, ICON_SIZE } from './render/icons.js'
+export { iconFor, familyFor, styleFor, kindLabel, iconSvg, ICONS, PALETTE, ICON_SIZE } from './render/icons.js'
 export type { IconKey, Family, FamilyStyle } from './render/icons.js'
 export { renderDot } from './render/dot.js'
 export { renderGraphvizSvg, detectTier, probeNativeDot } from './render/graphviz.js'

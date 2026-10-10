@@ -126,6 +126,8 @@ npx tsx src/cli.ts render examples/architecture.yaml --view app -o app.svg
 
 Nodes are drawn with a category icon, the entity name, and its `kind` underneath. The icons are **drawn in this repo and chosen by category** — database, queue, load balancer — not by vendor: no icon pack to install, nothing to license, and one glyph that fits an RDS instance, a Cloud SQL instance and an on-prem Postgres alike. Colour groups the categories into families (edge, compute, data, messaging, security), so a diagram reads as a few zones instead of thirty unrelated boxes. Use `--no-icons` for plain boxes.
 
+Being chosen by category rather than vendor is also what makes a mixed estate work without new rules: `AWS::ECS::Service` from CloudFormation, `google_sql_database_instance`, and an on-prem Postgres all classify correctly. Where an entity's `platform` is not already obvious from its `kind`, it appears on that second line — a Dynatrace `SERVICE` draws as `SERVICE · aws`, while `aws_s3_bucket` on platform `aws` is left alone rather than repeating itself.
+
 The icons are inlined into the SVG rather than handed to Graphviz as `image=` attributes, because the native `dot` binary resolves those as filesystem paths — a `data:` URI would work on the WASM tier and break on the native one. Post-processing the SVG means both tiers draw the same picture, and the result stays self-contained — no external references, no base64 bloat.
 
 Every image in this README is generated from `examples/architecture.yaml` by `npm run docs`, and CI re-runs it and fails if the result differs from what is committed. A stale picture of your own output is worse than no picture, so the renders are checked against their source rather than trusted — the drift gate's own argument, one level up.
@@ -453,7 +455,7 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 165 tests
+npm test        # 175 tests
 npm run typecheck
 npm run build
 ```

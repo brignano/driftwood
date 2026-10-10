@@ -1,5 +1,5 @@
 import type { Entity, Model } from '../model/schema.js'
-import { PALETTE, familyFor, iconFor } from './icons.js'
+import { PALETTE, familyFor, iconFor, kindLabel } from './icons.js'
 import type { Family, IconKey } from './icons.js'
 import { selectEntities } from './select.js'
 import { defineRenderer } from './types.js'
@@ -47,7 +47,7 @@ const SHAPES: Partial<Record<IconKey, (id: string, label: string) => string>> = 
 }
 
 function renderNode(e: Entity): string {
-  const label = escapeLabel(`${e.name ?? e.id}\n${e.kind}`)
+  const label = escapeLabel(`${e.name ?? e.id}\n${kindLabel(e.kind, e.platform)}`)
   const id = nodeId(e.id)
   const shape = SHAPES[iconFor(e.kind)]
   return shape ? shape(id, label) : `${id}["${label}"]`

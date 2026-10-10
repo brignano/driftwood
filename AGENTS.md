@@ -52,7 +52,9 @@ See `.claude/skills/add-renderer/SKILL.md`. Implement `Renderer` from `src/rende
 
 `src/render/icons.ts` owns what an entity *is* (`iconFor`) and what colour it gets (`familyFor`, `PALETTE`). Every renderer classifies through it — Mermaid maps the same keys onto shapes because it has no icon primitive. Never add a second regex table; a queue drawn as a queue in one engine and a cylinder in another means the pictures no longer describe the same system.
 
-Icons are drawn in this repo, by category rather than by vendor: no asset pack to vendor, no trademark terms, and one glyph that serves RDS, Cloud SQL and an on-prem Postgres alike.
+Icons are drawn in this repo, by category rather than by vendor: no asset pack to vendor, no trademark terms, and one glyph that serves RDS, Cloud SQL and an on-prem Postgres alike. Being vendor-neutral is what makes a second declarative provider cheap — CloudFormation type names (`AWS::ECS::Service`) and GCP kinds classify correctly with no new rules.
+
+`kindLabel` owns the muted second line, and shows an entity's `platform` only when its `kind` does not already state it. `aws_s3_bucket` on platform `aws` would be noise; a Dynatrace `SERVICE` on platform `aws` is the only thing telling a reader which cloud it runs in. It lives beside the classification table for the same reason everything else does: a node labelled `aws` in one engine and not in another means the pictures no longer describe the same system.
 
 Two things about the mechanism are load-bearing and easy to break:
 

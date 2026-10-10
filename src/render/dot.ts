@@ -2,7 +2,7 @@ import type { Entity, Model } from '../model/schema.js'
 import { defineRenderer } from './types.js'
 import type { RenderContext } from './types.js'
 import { selectEntities } from './select.js'
-import { ICON_SIZE, MARKER_PREFIX, iconFor, marker, styleFor } from './icons.js'
+import { ICON_SIZE, MARKER_PREFIX, iconFor, kindLabel, marker, styleFor } from './icons.js'
 
 /**
  * Graphviz DOT source.
@@ -100,7 +100,7 @@ export function renderDot(model: Model, ctx: RenderContext = {}): string {
       )
     }
     rows.push(`<TR><TD><FONT POINT-SIZE="11" COLOR="${INK}"><B>${xml(e.name ?? e.id)}</B></FONT></TD></TR>`)
-    rows.push(`<TR><TD><FONT POINT-SIZE="8" COLOR="${MUTED}">${xml(e.kind)}</FONT></TD></TR>`)
+    rows.push(`<TR><TD><FONT POINT-SIZE="8" COLOR="${MUTED}">${xml(kindLabel(e.kind, e.platform))}</FONT></TD></TR>`)
     const label = `<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="1">${rows.join('')}</TABLE>>`
     return (
       `${indent}"${quote(e.id)}" [label=${label} fillcolor="${style.tint}" ` +
