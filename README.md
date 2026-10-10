@@ -331,7 +331,24 @@ removed. Check that the pipeline publishing it is still running.
 
 A future-dated artifact is refused the same way, rather than treating clock skew as fact. `examples/observe-publish.yml` is the publishing half; nothing in it is GitHub-specific beyond the syntax.
 
-**Still missing:** the observation has to be taken somewhere that can see the state. Fetching it remotely — a Terraform Cloud workspace by name, an S3 backend by bucket and key, a live cloud API by account — is the next step, and is what would let the model's repository pull on a schedule rather than wait to be pushed to.
+### Or pull it instead
+
+When the state lives in Terraform Cloud, HCP Terraform or Terraform Enterprise, the model's repository can fetch it on its own schedule. Nothing has to push anything:
+
+```yaml
+providers:
+  - use: terraform-cloud
+    with:
+      organization: acme
+      workspace: prod-orders
+      tokenEnv: TFE_TOKEN   # a team token with "Read state versions"
+```
+
+It makes three read-only calls: resolve the workspace, read its current state version, and download that state. Then it reads the state exactly as the `terraform` provider reads a local file. The token goes only to the address you configured. A download URL that points anywhere else is fetched without it.
+
+There is no `maxAgeMinutes` here, on purpose. The current state version is read live, so it is as fresh as the call. Its age only tells you when someone last applied, and a workspace nobody has touched in a month still describes what exists. A workspace with no state at all is refused rather than read as empty. An empty answer would reach the reconciler as a mass deletion.
+
+**Still missing:** an S3 backend by bucket and key, and a live cloud API by account. A live cloud API would also catch changes made outside Terraform entirely.
 
 ## Extensible by design
 
@@ -342,6 +359,7 @@ Providers and renderers are both registries. A third-party plugin registers exac
 | Provider | Kind | Platforms | Status |
 |---|---|---|---|
 | `terraform` | declarative | **any** (AWS, GCP, Azure, vSphere, on-prem) | built in |
+| `terraform-cloud` | declarative | **any** — a Terraform Cloud / HCP Terraform / Enterprise workspace, fetched by name | built in |
 | `dynatrace` | runtime | aws, gcp, azure, onprem, kubernetes | built in |
 | Splunk, cloud APIs, OTel, Kubernetes | — | — | extension point ready |
 

@@ -19,7 +19,14 @@ export type { ObservationResult } from './model/observation.js'
 
 // Extension points
 export { Registry } from './registry.js'
-export { providers, defineProvider, terraformProvider, dynatraceProvider, observationProvider } from './providers/index.js'
+export {
+  providers,
+  defineProvider,
+  terraformProvider,
+  dynatraceProvider,
+  observationProvider,
+  terraformCloudProvider,
+} from './providers/index.js'
 export type { Provider, ProviderContext, ProviderKind } from './providers/index.js'
 export { renderers, render, resolveRenderer } from './render/index.js'
 export { defineRenderer } from './render/types.js'
