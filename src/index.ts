@@ -26,6 +26,7 @@ export {
   dynatraceProvider,
   observationProvider,
   terraformCloudProvider,
+  terraformS3Provider,
 } from './providers/index.js'
 export type { Provider, ProviderContext, ProviderKind } from './providers/index.js'
 export { renderers, render, resolveRenderer } from './render/index.js'

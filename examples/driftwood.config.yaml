@@ -26,6 +26,19 @@ providers:
   #     tokenEnv: TFE_TOKEN             # the env var name, never the token
   #     # address: https://tfe.corp.example   # Terraform Enterprise
 
+  # Or from an S3 backend. Credentials come from the usual AWS env vars, so
+  # GitHub's OIDC role action or a CI credential binding is all it needs;
+  # with a profile or SSO, `aws configure export-credentials --format env`.
+  # The role needs s3:GetObject on the one object (and kms:Decrypt with a CMK).
+  #
+  # - use: terraform-s3
+  #   with:
+  #     bucket: acme-tfstate
+  #     key: prod/orders.tfstate
+  #     region: eu-west-1
+  #     # workspace: staging            # non-default workspace -> env:/staging/<key>
+  #     # endpoint: https://minio.corp.example   # S3-compatible storage
+
   # Runtime source: what is *actually running*. Commented out because it needs
   # a live environment and a token; uncomment to reconcile intent against
   # reality rather than intent against itself. The `aliases` block in
