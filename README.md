@@ -364,6 +364,36 @@ It needs `s3:GetObject` on that one object, plus `kms:Decrypt` if the bucket use
 
 **Still missing:** a live cloud API by account. It would catch changes made outside Terraform entirely.
 
+### Show it on the build page
+
+`observe` hands facts to the repository that holds the model. `snapshot` is for the other audience: the person who just deployed. Run it as the last step of a deploy, from any CI system or build tool, and it writes a directory a build page can show as is:
+
+```bash
+driftwood snapshot --terraform /tmp/state.json \
+  --model architecture.yaml \
+  --previous last-deploy/ \
+  --origin pipeline=orders-api --origin stage=prod --origin commit=$GIT_SHA \
+  -o driftwood-snapshot
+```
+
+```
+driftwood-snapshot/
+  snapshot.json          the observation, what this deploy changed, drift from the design, health
+  summary.md             markdown for a CI job summary; Mermaid diagrams are inlined
+  diagram.svg            the whole estate
+  diagram-<view>.svg     one per view in the committed model
+```
+
+Every input except the state is optional, and each one adds a section:
+
+- **`--model`** lends the snapshot the committed model's hand-written views, and reports how far this deploy sits from that design. Only the views and aliases are borrowed, so the diagrams still show what is actually deployed.
+- **`--previous`** takes the last deploy's snapshot directory and reports what this deploy added, removed and changed. The first deploy has no previous snapshot, and that is not an error. The committed model's `coverage` applies here too, so a resource the deploy role cannot see is never reported as removed by this deploy.
+- **`--health`** colours the diagrams, exactly as `render --health` does.
+
+`snapshot` exits 0 when it finds drift. It runs after a deploy, and a reporting step that fails the deploy gets switched off. `reconcile` remains the gate. A provider that cannot answer still fails, because a half-empty snapshot would show everything as removed.
+
+`snapshot.json` is versioned (`"snapshot": 1`) and its schema is exported as `Snapshot`, so a build platform can read it without running driftwood. A Node host can skip the files entirely and call `takeSnapshot()`, which returns the same snapshot and diagrams in memory.
+
 ## Extensible by design
 
 Providers and renderers are both registries. A third-party plugin registers exactly the way a built-in does — there is no separate plugin API.
@@ -475,9 +505,10 @@ src/
   render/graphviz.ts     SVG via native dot or WASM, with tier detection
   model/apply.ts         writes observed drift back, preserving comments and hand edits
   model/observation.ts   the observe/consume envelope, with provenance and an age
+  snapshot.ts            post-deploy bundle: diagrams, changes since last deploy, drift summary
   reconcile/index.ts     declared vs observed -> drift report
   config.ts              driftwood.config.yaml
-  cli.ts                 validate · render · engines · providers · import · observe · reconcile
+  cli.ts                 validate · render · engines · providers · import · observe · snapshot · reconcile
 examples/                a worked 45-resource AWS platform, a drifted copy, a config,
                          and two workflows to copy (drift-PR, observe-publish)
 scripts/render-docs.ts   regenerates docs/ and the README's embedded render
@@ -488,7 +519,7 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 178 tests
+npm test        # 224 tests
 npm run typecheck
 npm run build
 ```
@@ -512,6 +543,7 @@ Built:
 - [x] Blind spots suppress deletions — unknown is reported as unknown, never as absent
 - [x] Drift written back as a reviewable pull request, comments and hand edits intact
 - [x] `observe` splits capture from reconciliation, so the deploy and the model can live apart
+- [x] `snapshot` packages a deploy for a build page: diagrams, what changed since the last deploy, and drift from the design
 
 Deliberately not built yet, roughly in order:
 
