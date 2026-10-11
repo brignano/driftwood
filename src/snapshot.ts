@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { Edge, Entity } from './model/schema.js'
@@ -84,9 +84,26 @@ export const SnapshotDiagram = z.object({
 })
 export type SnapshotDiagram = z.infer<typeof SnapshotDiagram>
 
+/**
+ * What a snapshot is *of*. A build platform deploys many apps to many
+ * environments, and a diagram nobody can attribute is worse than none — so
+ * identity is a required, typed field rather than whatever free-form `origin`
+ * keys a pipeline happened to set. It is also the store's directory layout, and
+ * what decides which earlier snapshot counts as "previous".
+ */
+export const SnapshotSubject = z.object({
+  /** The app, service or repository deployed. */
+  app: z.string().min(1),
+  environment: z.string().min(1).default('default'),
+  /** The build or pipeline run id. Names the snapshot's directory in a store. */
+  build: z.string().min(1).optional(),
+})
+export type SnapshotSubject = z.infer<typeof SnapshotSubject>
+
 export const Snapshot = z.object({
   /** Format version, independent of the observation's and the model's. */
   snapshot: z.literal(1),
+  subject: SnapshotSubject,
   observation: Observation,
   changes: SnapshotChanges.optional(),
   drift: SnapshotDrift.optional(),
@@ -96,6 +113,7 @@ export const Snapshot = z.object({
 export type Snapshot = z.infer<typeof Snapshot>
 
 export interface SnapshotOptions {
+  subject: z.input<typeof SnapshotSubject>
   /** The merged observation, as `observeAll` or an importer produced it. */
   observed: Model
   sources: SourcedModel[]
@@ -181,6 +199,8 @@ function driftFrom(declared: Model, observed: Model): SnapshotDrift {
  * that wants the diagrams without driftwood writing files on its behalf.
  */
 export async function takeSnapshot(opts: SnapshotOptions): Promise<SnapshotBundle> {
+  const subject = SnapshotSubject.parse(opts.subject)
+  if (opts.previous) assertSameSubject(opts.previous, subject)
   const views = opts.declared?.views ?? opts.observed.views
   // Views come from the committed model, aliases have already been applied by
   // the merge, and nothing else from the declared model leaks into what was
@@ -211,6 +231,7 @@ export async function takeSnapshot(opts: SnapshotOptions): Promise<SnapshotBundl
 
   const snapshot = Snapshot.parse({
     snapshot: 1,
+    subject,
     observation,
     changes: opts.previous ? changesSince(opts.previous, model, opts.declared) : undefined,
     drift: opts.declared ? driftFrom(opts.declared, model) : undefined,
@@ -220,6 +241,21 @@ export async function takeSnapshot(opts: SnapshotOptions): Promise<SnapshotBundl
 
   files[SUMMARY_FILE] = formatSnapshotSummary(snapshot, files, opts.now)
   return { snapshot, files, fellBackFrom }
+}
+
+/**
+ * Comparing one app's deploy against another's would report every entity as
+ * added and every other as removed, which reads as a catastrophe rather than a
+ * mistake. Refuse it instead.
+ */
+function assertSameSubject(previous: Snapshot, subject: SnapshotSubject): void {
+  const was = previous.subject
+  if (was.app !== subject.app || was.environment !== subject.environment) {
+    throw new Error(
+      `the previous snapshot is for ${was.app}/${was.environment}, not ${subject.app}/${subject.environment} — ` +
+        'comparing them would report everything as changed. Pass the previous snapshot of the same app and environment.',
+    )
+  }
 }
 
 export interface SnapshotParseResult {
@@ -285,6 +321,110 @@ export function writeSnapshot(dir: string, bundle: SnapshotBundle): string[] {
   return written
 }
 
+export const LATEST_FILE = 'latest.json'
+
+/**
+ * Where a store keeps the latest snapshot of one app in one environment. Read
+ * by the platform to show the current picture without listing anything, and by
+ * the next deploy to find what it is compared against.
+ */
+export const LatestPointer = z.object({
+  latest: z.string().min(1),
+  observedAt: z.string().datetime(),
+  build: z.string().optional(),
+})
+export type LatestPointer = z.infer<typeof LatestPointer>
+
+/**
+ * App, environment and build ids become directory names, and arrive from
+ * pipeline variables nobody here controls. Anything outside a conservative set
+ * is replaced, and a segment that would climb out of the store is refused.
+ */
+function pathSegment(value: string, label: string): string {
+  const safe = value.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
+  if (!safe || /^\.+$/.test(safe)) throw new Error(`${label} '${value}' cannot be used as a directory name`)
+  return safe
+}
+
+/** `<store>/<app>/<environment>`, the directory holding every snapshot of one subject. */
+export function subjectDir(store: string, subject: z.input<typeof SnapshotSubject>): string {
+  const s = SnapshotSubject.parse(subject)
+  return join(store, pathSegment(s.app, 'app'), pathSegment(s.environment, 'environment'))
+}
+
+/**
+ * The build id when there is one, otherwise the observation time, compacted so
+ * directory listings sort chronologically.
+ */
+function snapshotDirName(snapshot: Snapshot): string {
+  if (snapshot.subject.build) return pathSegment(snapshot.subject.build, 'build')
+  return snapshot.observation.observedAt.replace(/[-:]/g, '').replace(/\.\d+Z$/, 'Z')
+}
+
+function readLatestPointer(dir: string): LatestPointer | undefined {
+  const path = join(dir, LATEST_FILE)
+  let source: string
+  try {
+    source = readFileSync(path, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
+  const parsed = LatestPointer.safeParse(JSON.parse(source))
+  if (!parsed.success) throw new Error(`${path} is not a valid latest pointer`)
+  return parsed.data
+}
+
+/** The most recent snapshot of a subject in a store, or undefined before its first deploy. */
+export function loadLatestSnapshot(store: string, subject: z.input<typeof SnapshotSubject>): Snapshot | undefined {
+  const dir = subjectDir(store, subject)
+  const pointer = readLatestPointer(dir)
+  if (!pointer) return undefined
+  const snapshot = loadPreviousSnapshot(join(dir, pathSegment(pointer.latest, 'latest')))
+  if (!snapshot) throw new Error(`${join(dir, LATEST_FILE)} points at ${pointer.latest}, which has no ${SNAPSHOT_FILE}`)
+  return snapshot
+}
+
+export interface StoreResult {
+  /** The directory the snapshot was written to. */
+  dir: string
+  written: string[]
+  /** False when a newer snapshot was already latest — a pipeline that finished out of order. */
+  latestUpdated: boolean
+}
+
+/**
+ * Writes a snapshot into a store at `<store>/<app>/<environment>/<build>/` and
+ * moves that subject's `latest.json` to it.
+ *
+ * `latest` only ever moves forward. Two pipelines for the same app can finish
+ * out of order, and the slower, older one must not make the platform show a
+ * picture that is no longer true. A re-run of the same build overwrites its
+ * own directory, which is what a retried deploy should do.
+ *
+ * Only a local directory is written. Uploading it to wherever the platform
+ * reads from belongs to the pipeline, so driftwood never needs write
+ * credentials for anything.
+ */
+export function writeToStore(store: string, bundle: SnapshotBundle): StoreResult {
+  const base = subjectDir(store, bundle.snapshot.subject)
+  const name = snapshotDirName(bundle.snapshot)
+  const dir = join(base, name)
+  const written = writeSnapshot(dir, bundle)
+
+  const current = readLatestPointer(base)
+  const observedAt = bundle.snapshot.observation.observedAt
+  const latestUpdated = !current || Date.parse(observedAt) >= Date.parse(current.observedAt)
+  if (latestUpdated) {
+    const pointer: LatestPointer = { latest: name, observedAt, build: bundle.snapshot.subject.build }
+    // Written aside and renamed, so a reader never sees half a pointer.
+    const tmp = join(base, `.${LATEST_FILE}.${process.pid}.tmp`)
+    writeFileSync(tmp, `${JSON.stringify(pointer, null, 2)}\n`)
+    renameSync(tmp, join(base, LATEST_FILE))
+  }
+  return { dir, written, latestUpdated }
+}
+
 const count = (n: number) => `${n} ${n === 1 ? 'entity' : 'entities'}`
 
 /**
@@ -297,7 +437,9 @@ export function formatSnapshotSummary(
   files: Record<string, string> = {},
   now: Date = new Date(),
 ): string {
-  const out: string[] = ['## Architecture after this deploy', '', formatObservation(snapshot.observation, now), '']
+  const { app, environment, build } = snapshot.subject
+  const heading = `## ${app} · ${environment}${build ? ` · ${build}` : ''}`
+  const out: string[] = [heading, '', formatObservation(snapshot.observation, now), '']
 
   const changes = snapshot.changes
   if (changes) {

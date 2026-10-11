@@ -75,12 +75,18 @@ export {
   SnapshotDrift,
   SnapshotDiagram,
   SnapshotFieldChange,
+  SnapshotSubject,
+  LatestPointer,
   SNAPSHOT_FILE,
+  LATEST_FILE,
   SUMMARY_FILE,
   takeSnapshot,
   parseSnapshot,
   loadPreviousSnapshot,
   writeSnapshot,
+  writeToStore,
+  loadLatestSnapshot,
+  subjectDir,
   formatSnapshotSummary,
 } from './snapshot.js'
-export type { SnapshotOptions, SnapshotBundle, SnapshotParseResult } from './snapshot.js'
+export type { SnapshotOptions, SnapshotBundle, SnapshotParseResult, StoreResult } from './snapshot.js'

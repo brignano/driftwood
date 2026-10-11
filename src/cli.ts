@@ -14,7 +14,7 @@ import { formatConflicts } from './model/merge.js'
 import { loadConfig, observeAll } from './config.js'
 import type { Model } from './model/schema.js'
 import { loadHealthMap, unknownHealthIds } from './health.js'
-import { loadPreviousSnapshot, takeSnapshot, writeSnapshot } from './snapshot.js'
+import { loadLatestSnapshot, loadPreviousSnapshot, takeSnapshot, writeSnapshot, writeToStore } from './snapshot.js'
 
 const program = new Command()
 program
@@ -231,37 +231,66 @@ program
   .option('-c, --config <file>', 'driftwood.config.yaml describing the providers to observe with')
   .option('--terraform <state>', 'shorthand for a single Terraform state file')
   .option('--include-data-sources', 'include data sources as entities', false)
+  .option('--app <name>', 'the app, service or repository deployed (defaults to the model name)')
+  .option('--env <name>', 'the environment deployed to', 'default')
+  .option('--build <id>', 'the build or pipeline run id; names the snapshot directory in a store')
   .option('--model <file>', 'committed model, for its views and aliases and to report drift against')
+  .option(
+    '--store <dir>',
+    'write to <dir>/<app>/<env>/<build>/, move that app and environment\'s latest.json, and compare against the previous latest',
+  )
   .option('--previous <path>', "the previous deploy's snapshot directory or snapshot.json, to report what changed")
   .option('--health <file>', 'JSON file mapping entity ids to healthy, degraded, or down')
   .option('--origin <key=value>', 'provenance to record, repeatable (pipeline, stage, commit, artifact)', collectOrigin, {})
   .option('--engine <name>', 'auto | mermaid | dot | graphviz', 'auto')
   .option('--direction <dir>', 'LR or TD', 'LR')
   .option('--no-icons', 'draw plain boxes instead of category icons')
-  .option('-o, --out-dir <dir>', 'directory to write the snapshot into', 'driftwood-snapshot')
+  .option('-o, --out-dir <dir>', 'directory to write the snapshot into, when not using --store')
   .action(
     async (opts: {
       config?: string
       terraform?: string
       includeDataSources: boolean
+      app?: string
+      env: string
+      build?: string
       model?: string
+      store?: string
       previous?: string
       health?: string
       origin: Record<string, string>
       engine: string
       direction: string
       icons: boolean
-      outDir: string
+      outDir?: string
     }) => {
+      if (opts.store && opts.outDir) {
+        console.error('use either --store <dir> or --out-dir <dir>, not both')
+        process.exit(2)
+      }
+      if (opts.store && !opts.app) {
+        // A store is shared across apps, so a snapshot filed under a guessed
+        // name is one nobody will find, or worse, one compared against another app.
+        console.error('--store needs --app, so the snapshot is filed under the right app')
+        process.exit(2)
+      }
+
       const declared = opts.model ? requireModel(opts.model) : undefined
       const { model, sources } = await observeForCli(opts, declared ?? emptyModel('observed'))
+      const subject = { app: opts.app ?? model.name, environment: opts.env, build: opts.build }
 
-      const previous = opts.previous ? loadPreviousSnapshot(opts.previous) : undefined
-      if (opts.previous && !previous) {
-        console.error(`note: no previous snapshot at ${opts.previous} — reporting this deploy without changes`)
+      const previousFrom = opts.previous ?? (opts.store ? `${opts.store} (latest for ${subject.app}/${subject.environment})` : undefined)
+      const previous = opts.previous
+        ? loadPreviousSnapshot(opts.previous)
+        : opts.store
+          ? loadLatestSnapshot(opts.store, subject)
+          : undefined
+      if (previousFrom && !previous) {
+        console.error(`note: no previous snapshot in ${previousFrom} — reporting this deploy without changes`)
       }
 
       const bundle = await takeSnapshot({
+        subject,
         observed: model,
         sources,
         declared,
@@ -277,8 +306,18 @@ program
         console.error(`note: ${bundle.fellBackFrom} unavailable, using ${d?.renderer} (${d?.via})`)
       }
 
-      const written = writeSnapshot(opts.outDir, bundle)
-      console.error(`wrote ${written.length} files to ${opts.outDir} — ${formatObservation(bundle.snapshot.observation)}`)
+      const summary = formatObservation(bundle.snapshot.observation)
+      if (opts.store) {
+        const stored = writeToStore(opts.store, bundle)
+        console.error(`wrote ${stored.written.length} files to ${stored.dir} — ${summary}`)
+        if (!stored.latestUpdated) {
+          console.error('note: a newer snapshot is already latest for this app and environment, so latest.json was left alone')
+        }
+      } else {
+        const dir = opts.outDir ?? 'driftwood-snapshot'
+        const written = writeSnapshot(dir, bundle)
+        console.error(`wrote ${written.length} files to ${dir} — ${summary}`)
+      }
       // Exit 0 even with drift: this runs after a deploy, and failing it over a
       // report would get the step removed. `reconcile` is the gate.
     },

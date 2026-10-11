@@ -5,13 +5,17 @@ import { describe, expect, it } from 'vitest'
 import { Model } from '../src/model/schema.js'
 import type { SourcedModel } from '../src/model/merge.js'
 import {
+  LATEST_FILE,
   SNAPSHOT_FILE,
   SUMMARY_FILE,
   formatSnapshotSummary,
+  loadLatestSnapshot,
   loadPreviousSnapshot,
   parseSnapshot,
+  subjectDir,
   takeSnapshot,
   writeSnapshot,
+  writeToStore,
 } from '../src/snapshot.js'
 import type { Snapshot } from '../src/snapshot.js'
 
@@ -58,7 +62,14 @@ const declared = model({
 })
 
 async function snapshotOf(m: Model, extra: Partial<Parameters<typeof takeSnapshot>[0]> = {}) {
-  return takeSnapshot({ observed: m, sources: sourced(m), engine: 'mermaid', now: new Date(), ...extra })
+  return takeSnapshot({
+    subject: { app: 'shop', environment: 'prod' },
+    observed: m,
+    sources: sourced(m),
+    engine: 'mermaid',
+    now: new Date(),
+    ...extra,
+  })
 }
 
 describe('takeSnapshot', () => {
@@ -178,7 +189,7 @@ describe('formatSnapshotSummary', () => {
   })
 
   it('lists other formats by file, since a summary cannot reference an artifact', async () => {
-    const { snapshot, files } = await takeSnapshot({ observed: first, sources: sourced(first), engine: 'dot' })
+    const { snapshot, files } = await takeSnapshot({ subject: { app: 'shop' }, observed: first, sources: sourced(first), engine: 'dot' })
     expect(files[SUMMARY_FILE]).toContain('- shop: `diagram.dot`')
     expect(files[SUMMARY_FILE]).not.toContain('```')
     expect(formatSnapshotSummary(snapshot)).toContain('`diagram.dot`')
@@ -227,5 +238,99 @@ describe('writing and reading snapshots', () => {
     const result = parseSnapshot({ snapshot: 2 } as unknown as Snapshot)
     expect(result.ok).toBe(false)
     expect(result.issues.join('\n')).toContain('snapshot')
+  })
+})
+
+describe('which app and environment a snapshot is of', () => {
+  it('is recorded on every snapshot, defaulting the environment', async () => {
+    const { snapshot } = await takeSnapshot({ subject: { app: 'shop' }, observed: first, sources: sourced(first), engine: 'dot' })
+    expect(snapshot.subject).toEqual({ app: 'shop', environment: 'default' })
+  })
+
+  it('heads the summary, so a build page says what it is showing', async () => {
+    const { files } = await snapshotOf(first, { subject: { app: 'orders-api', environment: 'prod', build: '412' } })
+    expect(files[SUMMARY_FILE]!.split('\n')[0]).toBe('## orders-api · prod · 412')
+  })
+
+  it("refuses to compare against another app's or environment's snapshot", async () => {
+    const previous = (await snapshotOf(first)).snapshot
+    // Every entity would read as added and every other as removed.
+    await expect(snapshotOf(second, { previous, subject: { app: 'payments', environment: 'prod' } })).rejects.toThrow(
+      /previous snapshot is for shop\/prod, not payments\/prod/,
+    )
+    await expect(snapshotOf(second, { previous, subject: { app: 'shop', environment: 'staging' } })).rejects.toThrow(
+      /not shop\/staging/,
+    )
+  })
+})
+
+describe('a store shared by many apps', () => {
+  const at = (iso: string) => new Date(iso)
+  const snap = (app: string, environment: string, build: string | undefined, m: Model, now: Date, previous?: Snapshot) =>
+    snapshotOf(m, { subject: { app, environment, build }, now, previous })
+
+  it('files each snapshot under its app, environment and build', async () => {
+    const store = tmp()
+    const result = writeToStore(store, await snap('orders-api', 'prod', '101', first, at('2026-10-01T10:00:00Z')))
+
+    expect(result.dir).toBe(join(store, 'orders-api', 'prod', '101'))
+    expect(result.latestUpdated).toBe(true)
+    expect(JSON.parse(readFileSync(join(store, 'orders-api', 'prod', LATEST_FILE), 'utf8'))).toEqual({
+      latest: '101',
+      observedAt: '2026-10-01T10:00:00.000Z',
+      build: '101',
+    })
+  })
+
+  it('names a build-less snapshot by its time, so listings sort chronologically', async () => {
+    const store = tmp()
+    const { dir } = writeToStore(store, await snap('shop', 'prod', undefined, first, at('2026-10-01T10:00:00.123Z')))
+    expect(dir).toBe(join(store, 'shop', 'prod', '20261001T100000Z'))
+  })
+
+  it("finds each subject's own latest, never another app's", async () => {
+    const store = tmp()
+    const orders = await snap('orders-api', 'prod', '101', first, at('2026-10-01T10:00:00Z'))
+    const payments = await snap('payments', 'prod', '7', second, at('2026-10-01T11:00:00Z'))
+    writeToStore(store, orders)
+    writeToStore(store, payments)
+
+    expect(loadLatestSnapshot(store, { app: 'orders-api', environment: 'prod' })).toEqual(orders.snapshot)
+    expect(loadLatestSnapshot(store, { app: 'payments', environment: 'prod' })).toEqual(payments.snapshot)
+    expect(loadLatestSnapshot(store, { app: 'orders-api', environment: 'staging' })).toBeUndefined()
+  })
+
+  it('compares the next deploy against the latest it finds', async () => {
+    const store = tmp()
+    writeToStore(store, await snap('shop', 'prod', '1', first, at('2026-10-01T10:00:00Z')))
+    const previous = loadLatestSnapshot(store, { app: 'shop', environment: 'prod' })
+    const { snapshot } = await snap('shop', 'prod', '2', second, at('2026-10-01T11:00:00Z'), previous)
+    expect(snapshot.changes!.entities.added).toEqual(['aws_sqs_queue.orders'])
+  })
+
+  it('never moves latest backwards when pipelines finish out of order', async () => {
+    const store = tmp()
+    writeToStore(store, await snap('shop', 'prod', '2', second, at('2026-10-01T11:00:00Z')))
+    const late = writeToStore(store, await snap('shop', 'prod', '1', first, at('2026-10-01T10:00:00Z')))
+
+    expect(late.latestUpdated).toBe(false)
+    expect(loadLatestSnapshot(store, { app: 'shop', environment: 'prod' })!.subject.build).toBe('2')
+    // Still written, so the history is complete.
+    expect(loadPreviousSnapshot(late.dir)!.subject.build).toBe('1')
+  })
+
+  it('keeps pipeline-supplied names inside the store', () => {
+    const store = tmp()
+    expect(subjectDir(store, { app: 'team/orders api', environment: 'prod' })).toBe(join(store, 'team-orders-api', 'prod'))
+    expect(() => subjectDir(store, { app: '..', environment: 'prod' })).toThrow(/cannot be used as a directory name/)
+    expect(() => subjectDir(store, { app: 'ok', environment: '///' })).toThrow(/cannot be used as a directory name/)
+  })
+
+  it('refuses a latest pointer whose snapshot is missing', async () => {
+    const store = tmp()
+    const base = subjectDir(store, { app: 'shop', environment: 'prod' })
+    mkdirSync(base, { recursive: true })
+    writeFileSync(join(base, LATEST_FILE), JSON.stringify({ latest: 'gone', observedAt: '2026-10-01T10:00:00Z' }))
+    expect(() => loadLatestSnapshot(store, { app: 'shop', environment: 'prod' })).toThrow(/points at gone/)
   })
 })
