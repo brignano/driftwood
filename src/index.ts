@@ -80,6 +80,7 @@ export {
   SNAPSHOT_FILE,
   LATEST_FILE,
   SUMMARY_FILE,
+  VIEWER_FILE,
   takeSnapshot,
   parseSnapshot,
   loadPreviousSnapshot,
@@ -90,3 +91,4 @@ export {
   formatSnapshotSummary,
 } from './snapshot.js'
 export type { SnapshotOptions, SnapshotBundle, SnapshotParseResult, StoreResult } from './snapshot.js'
+export { renderViewer } from './viewer.js'

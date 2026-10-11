@@ -383,6 +383,7 @@ snapshots/
       latest.json          {"latest": "412", "observedAt": "...", "build": "412"}
       411/
       412/
+        index.html         the page a platform embeds: interactive diagrams, changes, blast radius
         snapshot.json      what was deployed, what this deploy changed, drift from the design, health
         summary.md         markdown for a CI job summary; Mermaid diagrams are inlined
         diagram.svg        the whole estate
@@ -406,9 +407,17 @@ Every input except the state is optional, and each one adds a section:
 
 `snapshot.json` is versioned (`"snapshot": 1`) and its schema is exported as `Snapshot`, so a build platform can read it without running driftwood. A Node host can skip the files entirely and call `takeSnapshot()`, which returns the same snapshot and diagrams in memory.
 
+**The page a platform embeds.** Every snapshot includes `index.html`, a single file with everything inline: the diagrams, the snapshot, and a small script. It needs no server, CDN or sibling file, so it works opened from disk, served from a bucket, or framed by a build platform. It shows:
+
+- each view as a tab, with health colours from `--health`;
+- what this deploy added (violet, dashed) and changed (cyan, dashed), with removals listed beside the diagram;
+- **blast radius**: click a component to highlight everything that depends on it, directly or through others, and everything it depends on.
+
+Blast radius follows the edges the providers recorded, so it is only as complete as they are. Terraform records references between resources, not runtime calls, so a database that services reach through a connection string shows nothing depending on it until a runtime provider such as Dynatrace adds those edges. Entity names reach the page as text, never as markup, because they come from someone's cloud account.
+
 `examples/snapshot-after-deploy.yml` is the two steps to add to the end of a deploy job: fetch the previous snapshot, snapshot this deploy, and publish both to a bucket the platform reads. Only the syntax is GitHub-specific.
 
-**See it run.** The [post-deploy demo](.github/workflows/demo.yml) runs three deploys of the example platform into one store: staging, prod, then staging again after hand edits. The job page of any run shows what a build platform would display for the last one, with its diagrams, and the store is attached as an artifact. Run it from the Actions tab with **Run workflow**.
+**See it run.** The [post-deploy demo](.github/workflows/demo.yml) runs three deploys of the example platform into one store: staging, prod, then staging again after hand edits. The job page of any run shows the summary for the last one, and the store is attached as an artifact. Open `orders-api/staging/2/index.html` from it to use the page a platform would embed. Run it from the Actions tab with **Run workflow**.
 
 ## Extensible by design
 
@@ -522,6 +531,7 @@ src/
   model/apply.ts         writes observed drift back, preserving comments and hand edits
   model/observation.ts   the observe/consume envelope, with provenance and an age
   snapshot.ts            post-deploy bundle and its per-app store: diagrams, changes, drift summary
+  viewer.ts              the self-contained page in every snapshot, with blast radius
   reconcile/index.ts     declared vs observed -> drift report
   config.ts              driftwood.config.yaml
   cli.ts                 validate · render · engines · providers · import · observe · snapshot · reconcile
@@ -536,7 +546,7 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 238 tests
+npm test        # 247 tests
 npm run typecheck
 npm run build
 ```

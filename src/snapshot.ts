@@ -9,6 +9,7 @@ import { COMPARED_FIELDS, reconcile } from './reconcile/index.js'
 import { resolveRenderer } from './render/index.js'
 import { HealthStatus } from './health.js'
 import type { HealthMap } from './health.js'
+import { renderViewer } from './viewer.js'
 
 /**
  * A snapshot: what one deploy left behind, packaged for whoever shows it.
@@ -143,6 +144,8 @@ export interface SnapshotBundle {
 
 export const SNAPSHOT_FILE = 'snapshot.json'
 export const SUMMARY_FILE = 'summary.md'
+/** The page a build platform embeds: diagrams, changes and blast radius, with nothing to fetch. */
+export const VIEWER_FILE = 'index.html'
 
 /** View ids are free text in the model; file names are not. */
 function fileStem(viewId: string): string {
@@ -240,6 +243,7 @@ export async function takeSnapshot(opts: SnapshotOptions): Promise<SnapshotBundl
   })
 
   files[SUMMARY_FILE] = formatSnapshotSummary(snapshot, files, opts.now)
+  files[VIEWER_FILE] = renderViewer(snapshot, files)
   return { snapshot, files, fellBackFrom }
 }
 

@@ -3,17 +3,17 @@
 # Three deploys of the example platform, as a build tool would run them:
 # staging, then prod, then staging again after someone changed things by hand.
 # Each one ends with `driftwood snapshot` writing into one shared store, and
-# its summary lands on this run's job page, where the Mermaid diagrams render
-# in place. The store is uploaded as an artifact: it is exactly the directory a
-# platform would read.
+# the last one's summary lands on this run's job page. The store is uploaded as
+# an artifact: it is exactly the directory a platform would read, and each
+# build's index.html is the interactive page a platform would embed.
 #
 # It doubles as a check. Every assertion below is something a platform
 # integration relies on, so a change that breaks the store's layout or its
 # "previous deploy" lookup fails here before it fails someone's build page.
 #
-# Real use renders SVG by default (bundled Graphviz). The demo passes
-# `--engine mermaid` only because a job summary can render Mermaid inline but
-# cannot show an image from an artifact.
+# Snapshots render SVG (bundled Graphviz), which the viewer makes interactive.
+# A job summary cannot show an image from an artifact, so the summary step adds
+# one view rendered as Mermaid, which GitHub draws in place.
 
 name: Post-deploy demo
 
@@ -46,7 +46,7 @@ jobs:
             --terraform examples/orders-platform.tfstate.json \
             --app orders-api --env staging --build 1 \
             --model examples/architecture.yaml \
-            --store "$STORE" --engine mermaid \
+            --store "$STORE" \
             --origin commit=${{ github.sha }} --origin run=${{ github.run_id }}
 
       - name: 'Deploy 2: orders-api to prod'
@@ -55,7 +55,7 @@ jobs:
             --terraform examples/orders-platform.tfstate.json \
             --app orders-api --env prod --build 1 \
             --model examples/architecture.yaml \
-            --store "$STORE" --engine mermaid \
+            --store "$STORE" \
             --origin commit=${{ github.sha }} --origin run=${{ github.run_id }}
 
       # The drifted state is the same platform later: two resources created by
@@ -66,7 +66,7 @@ jobs:
             --terraform examples/orders-platform.drifted.tfstate.json \
             --app orders-api --env staging --build 2 \
             --model examples/architecture.yaml \
-            --store "$STORE" --engine mermaid \
+            --store "$STORE" \
             --health examples/health.json \
             --origin commit=${{ github.sha }} --origin run=${{ github.run_id }}
 
@@ -79,6 +79,16 @@ jobs:
             echo "Below is the latest staging deploy, compared against the staging deploy before it."
             echo
             cat "$STORE/orders-api/staging/2/summary.md"
+            echo
+            echo "#### Request path, as Mermaid"
+            echo
+            echo "Download the \`driftwood-snapshots\` artifact and open \`orders-api/staging/2/index.html\` for the interactive page."
+            echo
+            echo '```mermaid'
+            # The deployed model, not the committed one: JSON is YAML, so render reads it as is.
+            jq .observation.model "$STORE/orders-api/staging/2/snapshot.json" > "$RUNNER_TEMP/deployed.json"
+            npx tsx src/cli.ts render "$RUNNER_TEMP/deployed.json" --view app --engine mermaid --health examples/health.json
+            echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: The store must be laid out the way a platform reads it
@@ -89,7 +99,10 @@ jobs:
           for build in staging/1 staging/2 prod/1; do
             test -f "$STORE/orders-api/$build/snapshot.json"
             test -f "$STORE/orders-api/$build/summary.md"
-            test -f "$STORE/orders-api/$build/diagram.mmd"
+            test -f "$STORE/orders-api/$build/diagram.svg"
+            # The page a platform embeds must carry everything it shows.
+            grep -q '<svg' "$STORE/orders-api/$build/index.html"
+            grep -q 'id="driftwood-data"' "$STORE/orders-api/$build/index.html"
           done
           test "$(jq -r '.subject | "\(.app)/\(.environment)/\(.build)"' "$STORE/orders-api/staging/2/snapshot.json")" = orders-api/staging/2
 
