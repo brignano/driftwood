@@ -1,0 +1,86 @@
+# Snapshots each deploy for a build page.
+#
+# Add the last two steps to the end of any deploy job. They are written for
+# GitHub Actions because that is what the rest of the examples use, but nothing
+# here is Actions-specific: a build tool runs `driftwood snapshot` after the
+# apply, then copies one directory to wherever its platform reads from. In
+# Harness, Jenkins or an in-house deploy CLI it is the same two steps.
+#
+# The store is laid out as <app>/<env>/<build>/, with a latest.json per app and
+# environment, so one bucket serves every app the platform builds. Each deploy
+# is compared against the latest snapshot of the same app and environment.
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  APP: orders-api
+  DEPLOY_ENV: prod
+  # Where the platform reads snapshots from. Any S3-compatible bucket or
+  # artifact repository works the same way.
+  SNAPSHOT_BUCKET: s3://acme-architecture-snapshots
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g @brignano/driftwood
+
+      # ... your existing deploy steps: terraform apply, helm upgrade, etc.
+
+      # Bring back the previous snapshot of this app and environment, so this
+      # deploy can say what it changed. Only latest.json and the one directory
+      # it names are needed. On the first deploy there is nothing to fetch, and
+      # driftwood treats that as a first deploy rather than an error.
+      #
+      # The role used here needs read and write on the snapshot bucket only.
+      # driftwood itself never uploads anything and never writes to
+      # infrastructure; the pipeline owns the copy.
+      - name: Fetch the previous snapshot
+        run: |
+          dir="snapshots/$APP/$DEPLOY_ENV"
+          mkdir -p "$dir"
+          if aws s3 cp "$SNAPSHOT_BUCKET/$APP/$DEPLOY_ENV/latest.json" "$dir/latest.json"; then
+            latest=$(jq -r .latest "$dir/latest.json")
+            aws s3 cp --recursive "$SNAPSHOT_BUCKET/$APP/$DEPLOY_ENV/$latest/" "$dir/$latest/"
+          fi
+
+      - name: Snapshot this deploy
+        run: |
+          terraform show -json > /tmp/state.json
+          driftwood snapshot \
+            --terraform /tmp/state.json \
+            --app "$APP" --env "$DEPLOY_ENV" --build "${{ github.run_number }}" \
+            --model architecture.yaml \
+            --store snapshots \
+            --origin commit=${{ github.sha }} \
+            --origin run=${{ github.run_id }}
+          # The summary is markdown, ready for any build page.
+          cat "snapshots/$APP/$DEPLOY_ENV/${{ github.run_number }}/summary.md" >> "$GITHUB_STEP_SUMMARY"
+        # `--model` is optional. With it, the diagrams use the committed
+        # model's views and the snapshot reports drift from the design. Drift
+        # never fails this step: a deploy that already happened should not go
+        # red over a report. `driftwood reconcile` is the gate.
+
+      # The build directory goes first and latest.json last, so a reader never
+      # sees a pointer to a directory that is not there yet.
+      #
+      # latest.json only moves forward within one run's store. If two deploys of
+      # the same app to the same environment can run at once, serialise them
+      # (most pipelines already do per environment) or the slower one can
+      # upload an older pointer.
+      - name: Publish the snapshot
+        run: |
+          dir="snapshots/$APP/$DEPLOY_ENV"
+          aws s3 cp --recursive "$dir/${{ github.run_number }}/" "$SNAPSHOT_BUCKET/$APP/$DEPLOY_ENV/${{ github.run_number }}/"
+          aws s3 cp "$dir/latest.json" "$SNAPSHOT_BUCKET/$APP/$DEPLOY_ENV/latest.json"

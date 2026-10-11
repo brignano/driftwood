@@ -406,6 +406,10 @@ Every input except the state is optional, and each one adds a section:
 
 `snapshot.json` is versioned (`"snapshot": 1`) and its schema is exported as `Snapshot`, so a build platform can read it without running driftwood. A Node host can skip the files entirely and call `takeSnapshot()`, which returns the same snapshot and diagrams in memory.
 
+`examples/snapshot-after-deploy.yml` is the two steps to add to the end of a deploy job: fetch the previous snapshot, snapshot this deploy, and publish both to a bucket the platform reads. Only the syntax is GitHub-specific.
+
+**See it run.** The [post-deploy demo](.github/workflows/demo.yml) runs three deploys of the example platform into one store: staging, prod, then staging again after hand edits. The job page of any run shows what a build platform would display for the last one, with its diagrams, and the store is attached as an artifact. Run it from the Actions tab with **Run workflow**.
+
 ## Extensible by design
 
 Providers and renderers are both registries. A third-party plugin registers exactly the way a built-in does — there is no separate plugin API.
@@ -522,7 +526,8 @@ src/
   config.ts              driftwood.config.yaml
   cli.ts                 validate · render · engines · providers · import · observe · snapshot · reconcile
 examples/                a worked 45-resource AWS platform, a drifted copy, a config,
-                         and two workflows to copy (drift-PR, observe-publish)
+                         and three workflows to copy (drift-PR, observe-publish,
+                         snapshot-after-deploy)
 scripts/render-docs.ts   regenerates docs/ and the README's embedded render
 docs/                    committed renders of the example, kept current by CI
 .claude/skills/          add-provider and add-renderer walkthroughs for agents
@@ -531,7 +536,7 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 234 tests
+npm test        # 238 tests
 npm run typecheck
 npm run build
 ```

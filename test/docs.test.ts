@@ -87,3 +87,38 @@ describe('the observation publishing template', () => {
     expect(template).not.toContain('contents: write')
   })
 })
+
+/**
+ * The post-deploy half a build platform copies. Its steps are the integration
+ * contract — the flags, the store layout, and the order of the uploads — so a
+ * renamed flag or a reordered upload breaks every copy at once.
+ */
+describe('the snapshot-after-deploy template', () => {
+  const template = readFileSync(new URL('../examples/snapshot-after-deploy.yml', import.meta.url), 'utf8')
+
+  it('uses flags the CLI actually has', () => {
+    const cli = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8')
+    for (const flag of ['--terraform', '--app', '--env', '--build', '--model', '--store', '--origin']) {
+      expect(template).toContain(flag)
+      expect(cli, `the template passes ${flag}, which the CLI no longer defines`).toContain(`'${flag} <`)
+    }
+    expect(template).toContain('driftwood snapshot')
+  })
+
+  it('reads summary.md from where a store files it', () => {
+    expect(template).toContain('snapshots/$APP/$DEPLOY_ENV/${{ github.run_number }}/summary.md')
+  })
+
+  it('publishes the build directory before the pointer to it', () => {
+    // A reader that sees latest.json first would follow it to nothing.
+    const dir = template.indexOf('aws s3 cp --recursive "$dir/${{ github.run_number }}/"')
+    const pointer = template.indexOf('aws s3 cp "$dir/latest.json"')
+    expect(dir).toBeGreaterThan(-1)
+    expect(pointer).toBeGreaterThan(dir)
+  })
+
+  it('asks for no write permission on the repository', () => {
+    expect(template).toContain('contents: read')
+    expect(template).not.toContain('contents: write')
+  })
+})
