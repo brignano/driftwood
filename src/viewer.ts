@@ -43,9 +43,11 @@ const STYLE = `
   --accent: #2563eb; --added: #7c3aed; --changed: #0891b2; --removed: #dc2626;
   --affected: #dc2626; --depends: #2563eb; --warn: #d97706;
 }
+/* A host that sets data-theme wins over the OS setting, in both directions. */
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #0b1120; --panel: #111827; --ink: #e5e7eb; --muted: #94a3b8; --line: #1f2937; }
+  :root:not([data-theme="light"]) { --bg: #0b1120; --panel: #111827; --ink: #e5e7eb; --muted: #94a3b8; --line: #1f2937; color-scheme: dark; }
 }
+:root[data-theme="dark"] { --bg: #0b1120; --panel: #111827; --ink: #e5e7eb; --muted: #94a3b8; --line: #1f2937; color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink);
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
