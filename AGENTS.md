@@ -131,6 +131,6 @@ npx tsx src/cli.ts snapshot    # post-deploy bundle for a build page: diagrams, 
 npm run docs                   # regenerate docs/ and the README's embedded render
 ```
 
-`examples/drift-pr.yml` is a workflow template people copy into their own repository, so CI is the only thing standing between a renamed CLI flag and a broken workflow everywhere it was copied. `test/docs.test.ts` asserts the flags it passes still exist.
+`examples/drift-pr.yml`, `examples/observe-publish.yml` and `examples/snapshot-after-deploy.yml` are workflow templates people copy into their own repository, so CI is the only thing standing between a renamed CLI flag and a broken workflow everywhere it was copied. `test/docs.test.ts` asserts the flags they pass still exist. `.github/workflows/demo.yml` runs three deploys into one snapshot store on every PR and asserts the layout and the previous-deploy lookup a platform integration relies on.
 
 Run `npm run typecheck && npm test` before every commit. CI runs both, plus the drift gate, plus the docs freshness gate, plus one job asserting Graphviz works from a plain install with no `dot` on PATH, and another running `--jitless` to assert the Mermaid fallback.

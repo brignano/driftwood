@@ -1,0 +1,116 @@
+# The post-deploy demo: what a build platform shows after each deploy.
+#
+# Three deploys of the example platform, as a build tool would run them:
+# staging, then prod, then staging again after someone changed things by hand.
+# Each one ends with `driftwood snapshot` writing into one shared store, and
+# its summary lands on this run's job page, where the Mermaid diagrams render
+# in place. The store is uploaded as an artifact: it is exactly the directory a
+# platform would read.
+#
+# It doubles as a check. Every assertion below is something a platform
+# integration relies on, so a change that breaks the store's layout or its
+# "previous deploy" lookup fails here before it fails someone's build page.
+#
+# Real use renders SVG by default (bundled Graphviz). The demo passes
+# `--engine mermaid` only because a job summary can render Mermaid inline but
+# cannot show an image from an artifact.
+
+name: Post-deploy demo
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploys:
+    runs-on: ubuntu-latest
+    env:
+      # Inside the workspace, so the artifact step can find it; never committed.
+      STORE: snapshots
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: 'Deploy 1: orders-api to staging'
+        run: |
+          npx tsx src/cli.ts snapshot \
+            --terraform examples/orders-platform.tfstate.json \
+            --app orders-api --env staging --build 1 \
+            --model examples/architecture.yaml \
+            --store "$STORE" --engine mermaid \
+            --origin commit=${{ github.sha }} --origin run=${{ github.run_id }}
+
+      - name: 'Deploy 2: orders-api to prod'
+        run: |
+          npx tsx src/cli.ts snapshot \
+            --terraform examples/orders-platform.tfstate.json \
+            --app orders-api --env prod --build 1 \
+            --model examples/architecture.yaml \
+            --store "$STORE" --engine mermaid \
+            --origin commit=${{ github.sha }} --origin run=${{ github.run_id }}
+
+      # The drifted state is the same platform later: two resources created by
+      # hand, one deleted, one renamed, and a secret the deploy role cannot list.
+      - name: 'Deploy 3: orders-api to staging, after hand edits'
+        run: |
+          npx tsx src/cli.ts snapshot \
+            --terraform examples/orders-platform.drifted.tfstate.json \
+            --app orders-api --env staging --build 2 \
+            --model examples/architecture.yaml \
+            --store "$STORE" --engine mermaid \
+            --health examples/health.json \
+            --origin commit=${{ github.sha }} --origin run=${{ github.run_id }}
+
+      - name: Show the latest deploy on this job's page
+        run: |
+          {
+            echo "# What the build platform would show"
+            echo
+            echo "Three deploys went into one store: \`orders-api/staging\` builds 1 and 2, and \`orders-api/prod\` build 1."
+            echo "Below is the latest staging deploy, compared against the staging deploy before it."
+            echo
+            cat "$STORE/orders-api/staging/2/summary.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: The store must be laid out the way a platform reads it
+        run: |
+          find "$STORE" -maxdepth 3 | sort
+          test "$(jq -r .latest "$STORE/orders-api/staging/latest.json")" = 2
+          test "$(jq -r .latest "$STORE/orders-api/prod/latest.json")" = 1
+          for build in staging/1 staging/2 prod/1; do
+            test -f "$STORE/orders-api/$build/snapshot.json"
+            test -f "$STORE/orders-api/$build/summary.md"
+            test -f "$STORE/orders-api/$build/diagram.mmd"
+          done
+          test "$(jq -r '.subject | "\(.app)/\(.environment)/\(.build)"' "$STORE/orders-api/staging/2/snapshot.json")" = orders-api/staging/2
+
+      # Staging build 2 must be compared against staging build 1, never against
+      # prod, and never against nothing.
+      - name: Each deploy must be compared against its own previous deploy
+        run: |
+          snap="$STORE/orders-api/staging/2/snapshot.json"
+          jq -e '.changes.entities.added | index("aws_sqs_queue.payments")' "$snap"
+          jq -e '.changes.entities.removed | map(.id) | index("aws_s3_bucket.uploads")' "$snap"
+          # A secret the role cannot list sits in a declared blind spot; it must
+          # not read as removed by this deploy.
+          if jq -e '.changes.entities.removed | map(.id) | index("aws_secretsmanager_secret.db_password")' "$snap"; then
+            echo "::error::an entity in a blind spot was reported as removed by a deploy"; exit 1
+          fi
+          # The first deploy to each environment has nothing to compare against.
+          jq -e '.changes == null' "$STORE/orders-api/prod/1/snapshot.json"
+          jq -e '.drift.hasDrift' "$snap"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: driftwood-snapshots
+          path: snapshots
+          retention-days: 7
