@@ -12,7 +12,15 @@ export interface RenderContext {
    * post-processing step to turn a marker into a picture.
    */
   icons?: boolean
+  /**
+   * What a pending change will do to each entity, by id, using Terraform's own
+   * verbs. Like health, an overlay applied at render time. Only Mermaid draws
+   * it today, because a plan preview is posted where Mermaid renders in place.
+   */
+  marks?: Record<string, ChangeMark>
 }
+
+export type ChangeMark = 'create' | 'update' | 'replace' | 'destroy'
 
 export interface Availability {
   available: boolean

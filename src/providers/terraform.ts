@@ -29,6 +29,39 @@ interface TfState {
   resources?: TfResource[]
 }
 
+/**
+ * A resource in the "values representation" Terraform's JSON output uses:
+ * `terraform show -json` on a state, and a plan's `prior_state` and
+ * `planned_values`. One entry per instance, so `count` and `for_each` repeat
+ * the resource with an `index`.
+ */
+export interface TfValuesResource {
+  address?: string
+  mode?: string
+  type?: string
+  name?: string
+  index?: unknown
+  provider_name?: string
+  values?: Record<string, unknown>
+  depends_on?: string[]
+}
+
+export interface TfValuesModule {
+  address?: string
+  resources?: TfValuesResource[]
+  child_modules?: TfValuesModule[]
+}
+
+export interface TfValues {
+  root_module?: TfValuesModule
+}
+
+/** What `terraform show -json` prints for a state. */
+interface TfShowJson {
+  format_version?: string
+  values?: TfValues
+}
+
 export interface ImportOptions {
   /** Data sources describe things Terraform reads but doesn't own. */
   includeDataSources?: boolean
@@ -88,7 +121,72 @@ function displayName(r: TfResource, attrs: Record<string, unknown> | undefined):
   return r.name ?? address(r)
 }
 
-export function importTerraformState(state: TfState, opts: ImportOptions = {}): Model {
+/**
+ * `aws_subnet.private[0]` and `aws_subnet.private["a"]` are one entity,
+ * `aws_subnet.private`: the raw state keys instances by resource the same way,
+ * and a diagram with one node per `count` index is a diagram of nothing. Only
+ * the trailing index goes; `module.zone["eu"].aws_vpc.main` keeps its module
+ * key because two module instances really are two things.
+ */
+export function resourceAddress(address: string): string {
+  return address.replace(/\[[^\]]*\]$/, '')
+}
+
+/**
+ * Converts the values representation into the raw state's shape, so both
+ * formats go through one importer and cannot disagree about ids, names or
+ * groups.
+ */
+export function stateFromValues(values: TfValues | undefined): TfState {
+  const byAddress = new Map<string, TfResource>()
+  const visit = (module: TfValuesModule | undefined) => {
+    if (!module) return
+    for (const r of module.resources ?? []) {
+      if (!r.address || !r.type || !r.name) continue
+      const key = resourceAddress(r.address)
+      // The module is whatever precedes the resource's own `type.name` in its
+      // address, which holds whether or not the module objects are nested.
+      const local = `${r.mode === 'data' ? 'data.' : ''}${r.type}.${r.name}`
+      const owner = key.endsWith(`.${local}`) ? key.slice(0, -(local.length + 1)) : module.address
+      let resource = byAddress.get(key)
+      if (!resource) {
+        resource = {
+          mode: r.mode,
+          type: r.type,
+          name: r.name,
+          module: owner,
+          provider: r.provider_name,
+          instances: [],
+        }
+        byAddress.set(key, resource)
+      }
+      resource.instances?.push({ attributes: r.values, dependencies: r.depends_on })
+    }
+    for (const child of module.child_modules ?? []) visit(child)
+  }
+  visit(values?.root_module)
+  return { version: 4, resources: [...byAddress.values()] }
+}
+
+/**
+ * Accepts the raw state file (`terraform state pull`, a backend object) and
+ * `terraform show -json`, which documentation and pipelines reach for first.
+ * A plan is refused by name: it describes two states at once, and reading
+ * either one silently would answer a question nobody asked.
+ */
+function normalizeState(input: TfState | TfShowJson): TfState {
+  if ('resource_changes' in input || 'planned_values' in input) {
+    throw new Error(
+      'this is a Terraform plan, not a state. Use `driftwood preview --plan <file>` to show what a plan changes.',
+    )
+  }
+  if ('resources' in input) return input as TfState
+  if ('values' in input || 'format_version' in input) return stateFromValues((input as TfShowJson).values)
+  return input as TfState
+}
+
+export function importTerraformState(input: TfState | TfShowJson, opts: ImportOptions = {}): Model {
+  const state = normalizeState(input)
   const model = emptyModel(opts.modelName ?? 'terraform')
   const entities: Entity[] = []
   const edges: Edge[] = []
@@ -122,7 +220,8 @@ export function importTerraformState(state: TfState, opts: ImportOptions = {}): 
     const from = address(r)
     if (!known.has(from)) continue
     for (const inst of r.instances ?? []) {
-      for (const dep of inst.dependencies ?? []) {
+      for (const raw of inst.dependencies ?? []) {
+        const dep = resourceAddress(raw)
         // Dependencies on filtered-out resources (e.g. data sources) would
         // produce dangling edges, which the validator rightly rejects.
         if (!known.has(dep)) continue
@@ -138,7 +237,7 @@ export function importTerraformState(state: TfState, opts: ImportOptions = {}): 
   return model
 }
 
-export function parseTerraformState(source: string): TfState {
+export function parseTerraformState(source: string): TfState | TfShowJson {
   const parsed = JSON.parse(source) as TfState
   if (parsed.version !== undefined && parsed.version !== 4) {
     throw new Error(`unsupported Terraform state version ${parsed.version} (expected 4)`)

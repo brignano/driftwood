@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { Command } from 'commander'
 import { dumpModel, loadModel } from './model/validate.js'
 import { importTerraformState, parseTerraformState } from './providers/terraform.js'
@@ -14,6 +15,7 @@ import { formatConflicts } from './model/merge.js'
 import { loadConfig, observeAll } from './config.js'
 import type { Model } from './model/schema.js'
 import { loadHealthMap, unknownHealthIds } from './health.js'
+import { COMMENT_FILE, PREVIEW_FILE, parseTerraformPlan, previewPlan } from './preview.js'
 import { loadLatestSnapshot, loadPreviousSnapshot, takeSnapshot, writeSnapshot, writeToStore } from './snapshot.js'
 
 const program = new Command()
@@ -322,6 +324,37 @@ program
       // report would get the step removed. `reconcile` is the gate.
     },
   )
+
+program
+  .command('preview')
+  .description('Before a deploy: draw what a Terraform plan will change, as a pull request comment')
+  .requiredOption('--plan <file>', 'output of `terraform show -json <planfile>`')
+  .option('--model <file>', 'committed model, to say whether the plan departs from the design')
+  .option('--title <text>', 'what the plan is for, e.g. the workspace or environment (defaults to the model name)')
+  .option('--include-data-sources', 'include data sources as entities', false)
+  .option('-o, --out-dir <dir>', `write ${COMMENT_FILE} and ${PREVIEW_FILE} here instead of printing the comment`)
+  .action((opts: { plan: string; model?: string; title?: string; includeDataSources: boolean; outDir?: string }) => {
+    const plan = parseTerraformPlan(readFileSync(opts.plan, 'utf8'))
+    const declared = opts.model ? requireModel(opts.model) : undefined
+    const { preview, comment } = previewPlan(plan, {
+      declared,
+      title: opts.title,
+      includeDataSources: opts.includeDataSources,
+    })
+    if (opts.outDir) {
+      mkdirSync(opts.outDir, { recursive: true })
+      writeFileSync(join(opts.outDir, COMMENT_FILE), comment)
+      writeFileSync(join(opts.outDir, PREVIEW_FILE), `${JSON.stringify(preview, null, 2)}\n`)
+      const { create, update, replace, destroy } = preview.changes
+      console.error(
+        `wrote ${COMMENT_FILE} and ${PREVIEW_FILE} to ${opts.outDir} — ${create.length} create, ${update.length} update, ${replace.length} replace, ${destroy.length} destroy`,
+      )
+    } else {
+      process.stdout.write(comment)
+    }
+    // Exit 0 whatever the plan does: the preview informs the review, and the
+    // review decides. `reconcile` is the gate.
+  })
 
 program
   .command('reconcile')

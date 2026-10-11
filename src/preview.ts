@@ -1,0 +1,486 @@
+import { z } from 'zod'
+import { Edge } from './model/schema.js'
+import type { Entity, Model } from './model/schema.js'
+import { matches } from './model/validate.js'
+import { importTerraformState, resourceAddress, stateFromValues } from './providers/terraform.js'
+import type { TfValues } from './providers/terraform.js'
+import { reconcile } from './reconcile/index.js'
+import { renderMermaid } from './render/mermaid.js'
+import type { ChangeMark } from './render/types.js'
+import { SnapshotDrift, driftFrom } from './snapshot.js'
+
+/**
+ * A plan preview: what a Terraform plan will do to the architecture, drawn
+ * for the pull request that proposes it.
+ *
+ * A snapshot answers "what did this deploy do" after the fact. The preview
+ * answers the same question while it can still be changed, for the reviewer
+ * deciding whether to approve. It reads the plan's own JSON and nothing else:
+ * no credentials, no network, and no apply. The plan already holds the state
+ * before (`prior_state`), the state after (`planned_values`) and what
+ * Terraform intends to do to each resource (`resource_changes`).
+ *
+ * Like a snapshot it reports and never gates. A plan that moves away from the
+ * committed design is worth saying so on the pull request; whether that blocks
+ * the merge is the repository's decision, and `reconcile` is the gate.
+ */
+
+/** The subset of `terraform show -json <planfile>` the preview reads. */
+export interface TfPlan {
+  format_version?: string
+  prior_state?: { values?: TfValues }
+  planned_values?: TfValues
+  resource_changes?: TfResourceChange[]
+  configuration?: { root_module?: TfConfigModule }
+}
+
+export interface TfResourceChange {
+  address?: string
+  mode?: string
+  change?: { actions?: string[] }
+}
+
+interface TfConfigResource {
+  mode?: string
+  type?: string
+  name?: string
+  expressions?: unknown
+  depends_on?: string[]
+}
+
+interface TfConfigModule {
+  resources?: TfConfigResource[]
+  module_calls?: Record<string, { module?: TfConfigModule }>
+}
+
+export const PlanChanges = z.object({
+  create: z.array(z.string()),
+  update: z.array(z.string()),
+  replace: z.array(z.string()),
+  destroy: z.array(z.string()),
+  edges: z.object({ added: z.array(Edge), removed: z.array(Edge) }),
+})
+export type PlanChanges = z.infer<typeof PlanChanges>
+
+/**
+ * The plan against the committed model. Only what this plan causes is listed
+ * by name: drift that was already there is not the reviewer's to fix in this
+ * pull request, so it is counted, not itemised.
+ */
+export const PlanDesign = z.object({
+  /** Created by this plan, and not in the model. */
+  createdNotDeclared: z.array(z.string()),
+  /** In the model, and destroyed by this plan. */
+  destroyedButDeclared: z.array(z.string()),
+  /** The distance from the model before this plan, which the pull request did not cause. */
+  beforePlan: SnapshotDrift,
+  /** The whole distance from the model once the plan is applied. */
+  afterApply: SnapshotDrift,
+})
+export type PlanDesign = z.infer<typeof PlanDesign>
+
+export const PlanPreview = z.object({
+  preview: z.literal(1),
+  title: z.string(),
+  changes: PlanChanges,
+  design: PlanDesign.optional(),
+})
+export type PlanPreview = z.infer<typeof PlanPreview>
+
+export interface PreviewOptions {
+  /** The committed model, to say whether the plan moves toward it or away. */
+  declared?: Model
+  includeDataSources?: boolean
+  /** Names the preview, usually the workspace or root module. */
+  title?: string
+}
+
+export interface PreviewResult {
+  preview: PlanPreview
+  /** Markdown for a pull request comment, starting with {@link PREVIEW_MARKER}. */
+  comment: string
+  /** The Mermaid source drawn in the comment, when anything changed. */
+  diagram?: string
+}
+
+/**
+ * The first line of every comment, so a workflow can find its earlier comment
+ * and edit it rather than adding one per push.
+ */
+export const PREVIEW_MARKER = '<!-- driftwood:plan-preview -->'
+export const COMMENT_FILE = 'comment.md'
+export const PREVIEW_FILE = 'preview.json'
+
+/** Past this many nodes a diagram in a comment stops being read. */
+const MAX_DIAGRAM_NODES = 40
+
+export function parseTerraformPlan(source: string): TfPlan {
+  const parsed = JSON.parse(source) as TfPlan
+  if (!parsed || typeof parsed !== 'object' || !('resource_changes' in parsed || 'planned_values' in parsed)) {
+    throw new Error(
+      'not a Terraform plan. Save one with `terraform plan -out=tfplan`, then pass the output of `terraform show -json tfplan`.',
+    )
+  }
+  const major = parsed.format_version?.split('.')[0]
+  if (major !== undefined && major !== '1') {
+    throw new Error(`unsupported plan format_version ${parsed.format_version} (expected 1.x)`)
+  }
+  return parsed
+}
+
+/**
+ * One verb per entity, from the verbs Terraform reports per instance. A
+ * resource whose `count` grows is still one entity, and it is being updated,
+ * not created. Replace wins over update because it is the one that loses data.
+ */
+function actionsByEntity(plan: TfPlan, includeDataSources: boolean): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>()
+  for (const rc of plan.resource_changes ?? []) {
+    if (!rc.address) continue
+    if (rc.mode === 'data' && !includeDataSources) continue
+    const actions = rc.change?.actions ?? []
+    const verb =
+      actions.includes('create') && actions.includes('delete')
+        ? 'replace'
+        : // `forget` (a `removed` block) stops managing a resource without
+          // destroying it, so it is not a change to what exists.
+          actions.find((a) => a === 'create' || a === 'delete' || a === 'update')
+    if (!verb) continue
+    const id = entityId(rc.address)
+    const set = out.get(id) ?? new Set<string>()
+    set.add(verb)
+    out.set(id, set)
+  }
+  return out
+}
+
+/** Values-representation addresses carry `data.` for data sources; entity ids do not. */
+function entityId(address: string): string {
+  // Only the `data.` right before `type.name`: a module may itself be called `data`.
+  return resourceAddress(address).replace(/^((?:module\.[^.]+\.)*)data\.([^.]+\.[^.]+)$/, '$1$2')
+}
+
+/** Every `references` array anywhere in a resource's expressions, nested blocks included. */
+function collectReferences(node: unknown, into: string[]): void {
+  if (Array.isArray(node)) {
+    for (const item of node) collectReferences(item, into)
+    return
+  }
+  if (!node || typeof node !== 'object') return
+  for (const [key, value] of Object.entries(node)) {
+    if (key === 'references' && Array.isArray(value)) {
+      for (const ref of value) if (typeof ref === 'string') into.push(ref)
+    } else {
+      collectReferences(value, into)
+    }
+  }
+}
+
+/**
+ * `aws_sqs_queue.orders.arn` and `data.aws_iam_policy_document.p.json` name
+ * the resources `aws_sqs_queue.orders` and `aws_iam_policy_document.p`.
+ * `var.`, `local.`, `each.` and module outputs name no resource and resolve to
+ * nothing, which the caller drops.
+ */
+function referencedEntity(ref: string, prefix: string): string | undefined {
+  const parts = ref.split('.')
+  if (parts[0] === 'data') parts.shift()
+  const [type, name] = parts
+  if (!type || !name || ['var', 'local', 'each', 'count', 'path', 'module', 'terraform', 'self'].includes(type)) {
+    return undefined
+  }
+  return prefix + resourceAddress(`${type}.${name}`)
+}
+
+/**
+ * Dependencies as the configuration in the plan states them: what each
+ * resource will depend on once applied. State only knows what it depended on
+ * at the last apply, which is stale for exactly the resources a plan touches.
+ */
+function configuredDependencies(plan: TfPlan): Map<string, Set<string>> {
+  const out = new Map<string, Set<string>>()
+  const visit = (module: TfConfigModule | undefined, prefix: string) => {
+    if (!module) return
+    for (const r of module.resources ?? []) {
+      if (!r.type || !r.name) continue
+      const from = `${prefix}${r.type}.${r.name}`
+      const refs: string[] = []
+      collectReferences(r.expressions, refs)
+      for (const d of r.depends_on ?? []) refs.push(d)
+      const deps = out.get(from) ?? new Set<string>()
+      for (const ref of refs) {
+        const to = referencedEntity(ref, prefix)
+        if (to && to !== from) deps.add(to)
+      }
+      out.set(from, deps)
+    }
+    for (const [name, call] of Object.entries(module.module_calls ?? {})) {
+      visit(call.module, `${prefix}module.${name}.`)
+    }
+  }
+  visit(plan.configuration?.root_module, '')
+  return out
+}
+
+/**
+ * The model once the plan is applied. Entities come from `planned_values`.
+ * Edges of untouched resources come from the prior state, which recorded
+ * them; edges of resources the plan touches come from the configuration,
+ * because that is what they will depend on afterwards.
+ */
+function afterModel(plan: TfPlan, before: Model, touched: Set<string>, includeDataSources: boolean): Model {
+  const after = importTerraformState(stateFromValues(plan.planned_values), {
+    includeDataSources,
+    modelName: before.name,
+  })
+  const known = new Set(after.entities.map((e) => e.id))
+  const configured = plan.configuration ? configuredDependencies(plan) : undefined
+  const edges: Edge[] = []
+  const seen = new Set<string>()
+  const push = (from: string, to: string) => {
+    const key = `${from}\u0000${to}`
+    if (seen.has(key) || !known.has(from) || !known.has(to)) return
+    seen.add(key)
+    edges.push({ from, to, kind: 'depends-on' })
+  }
+  for (const e of before.edges) {
+    if (configured && touched.has(e.from) && configured.has(e.from)) continue
+    push(e.from, e.to)
+  }
+  if (configured) {
+    for (const id of touched) for (const to of configured.get(id) ?? []) push(id, to)
+  }
+  after.edges = edges.sort((a, b) => (a.from + a.to).localeCompare(b.from + b.to))
+  return after
+}
+
+function classify(before: Model, after: Model, actions: Map<string, Set<string>>): Map<string, ChangeMark> {
+  const inBefore = new Set(before.entities.map((e) => e.id))
+  const inAfter = new Set(after.entities.map((e) => e.id))
+  const marks = new Map<string, ChangeMark>()
+  for (const [id, verbs] of actions) {
+    if (inBefore.has(id) && !inAfter.has(id)) marks.set(id, 'destroy')
+    else if (!inBefore.has(id) && inAfter.has(id)) marks.set(id, 'create')
+    else if (verbs.has('replace')) marks.set(id, 'replace')
+    else if (inBefore.has(id) || inAfter.has(id)) marks.set(id, 'update')
+  }
+  return marks
+}
+
+function isIgnored(declared: Model | undefined, e: Entity): boolean {
+  if (!declared) return false
+  return (
+    declared.ignore.entities.some((p) => matches(p, e.id)) || declared.ignore.kinds.some((p) => matches(p, e.kind))
+  )
+}
+
+/**
+ * The part of the estate the plan touches, plus one hop around it so a
+ * reviewer sees what a change is wired to. Neighbours the committed model
+ * ignores (log groups, typically) are left out; changed entities never are.
+ * A plan too large for one picture keeps only the changed entities.
+ */
+function diagramModel(
+  before: Model,
+  after: Model,
+  marks: Map<string, ChangeMark>,
+  declared: Model | undefined,
+): { model: Model; neighbours: boolean } | undefined {
+  if (marks.size === 0 || marks.size > MAX_DIAGRAM_NODES) return undefined
+  const byId = new Map<string, Entity>()
+  for (const e of before.entities) byId.set(e.id, e)
+  for (const e of after.entities) byId.set(e.id, e)
+
+  // Edges to and from destroyed entities exist only in the prior state.
+  const edges = [...after.edges, ...before.edges.filter((e) => marks.get(e.from) === 'destroy' || marks.get(e.to) === 'destroy')]
+  const withNeighbours = new Set(marks.keys())
+  for (const e of edges) {
+    for (const [a, b] of [
+      [e.from, e.to],
+      [e.to, e.from],
+    ] as const) {
+      const other = byId.get(b)
+      if (marks.has(a) && other && !isIgnored(declared, other)) withNeighbours.add(b)
+    }
+  }
+  const neighbours = withNeighbours.size <= MAX_DIAGRAM_NODES
+  const ids = neighbours ? withNeighbours : new Set(marks.keys())
+
+  const entities = [...ids].map((id) => byId.get(id)).filter((e): e is Entity => e !== undefined)
+  entities.sort((a, b) => a.id.localeCompare(b.id))
+  const seen = new Set<string>()
+  const kept: Edge[] = []
+  for (const e of edges) {
+    const key = `${e.from}\u0000${e.to}`
+    if (!ids.has(e.from) || !ids.has(e.to) || seen.has(key)) continue
+    seen.add(key)
+    kept.push(e)
+  }
+  return { model: { ...after, entities, edges: kept, views: [] }, neighbours }
+}
+
+/** Builds the preview in memory: no disk, no network. */
+export function previewPlan(plan: TfPlan, opts: PreviewOptions = {}): PreviewResult {
+  const includeDataSources = opts.includeDataSources ?? false
+  const name = opts.declared?.name ?? 'terraform'
+  const before = importTerraformState(stateFromValues(plan.prior_state?.values), { includeDataSources, modelName: name })
+  const actions = actionsByEntity(plan, includeDataSources)
+  const after = afterModel(plan, before, new Set(actions.keys()), includeDataSources)
+  const marks = classify(before, after, actions)
+
+  const byMark = (mark: ChangeMark) =>
+    [...marks].filter(([, m]) => m === mark).map(([id]) => id).sort((a, b) => a.localeCompare(b))
+  const edgeDiff = reconcile(before, after)
+  const changes: PlanChanges = {
+    create: byMark('create'),
+    update: byMark('update'),
+    replace: byMark('replace'),
+    destroy: byMark('destroy'),
+    edges: { added: edgeDiff.edges.added, removed: edgeDiff.edges.removed },
+  }
+
+  let design: PlanDesign | undefined
+  if (opts.declared) {
+    const afterApply = driftFrom(opts.declared, after)
+    // Coverage is set aside here: a blind spot means the observer might not
+    // see something, but a plan that destroys it is not guessing.
+    const plainDeclared = { ...opts.declared, coverage: [] }
+    const destroyedFromModel = new Set(reconcile(plainDeclared, after).entities.removed.map((e) => e.id))
+    design = {
+      createdNotDeclared: changes.create.filter((id) => afterApply.entities.added.includes(id)),
+      destroyedButDeclared: changes.destroy.filter((id) => destroyedFromModel.has(id)),
+      beforePlan: driftFrom(opts.declared, before),
+      afterApply,
+    }
+  }
+
+  const preview = PlanPreview.parse({
+    preview: 1,
+    title: opts.title ?? name,
+    changes,
+    design,
+  })
+
+  const picture = diagramModel(before, after, marks, opts.declared)
+  const diagram = picture ? renderMermaid(picture.model, { direction: 'LR', marks: Object.fromEntries(marks) }) : undefined
+  const entities = new Map([...before.entities, ...after.entities].map((e) => [e.id, e]))
+  const comment = formatPreviewComment(preview, { diagram, neighbours: picture?.neighbours ?? true, entities })
+  return { preview, comment, diagram }
+}
+
+/** A code span that survives any backticks inside it. */
+function code(text: string): string {
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length))
+  const fence = '`'.repeat(longest + 1)
+  return `${fence}${longest ? ' ' : ''}${text}${longest ? ' ' : ''}${fence}`
+}
+
+/** Names come from infrastructure; in a table cell they must not start a column, a tag or a new row. */
+function cell(text: string): string {
+  return text.replace(/[\r\n]+/g, ' ').replace(/\|/g, '\\|').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+const resources = (n: number) => `${n} ${n === 1 ? 'resource' : 'resources'}`
+
+const VERBS: [keyof Omit<PlanChanges, 'edges'>, string][] = [
+  ['create', 'creates'],
+  ['replace', 'replaces'],
+  ['update', 'updates'],
+  ['destroy', 'destroys'],
+]
+
+function listSentence(parts: string[]): string {
+  if (parts.length <= 1) return parts.join('')
+  return `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}`
+}
+
+export interface CommentContext {
+  diagram?: string
+  /** False when the diagram had to drop the changed entities' neighbours. */
+  neighbours?: boolean
+  entities?: Map<string, Entity>
+}
+
+/**
+ * Markdown for the pull request. Leads with the count and with anything that
+ * loses data, because a reviewer skimming a busy pull request reads one line;
+ * the full list folds away below the picture.
+ */
+export function formatPreviewComment(preview: PlanPreview, ctx: CommentContext = {}): string {
+  const { changes, design } = preview
+  const out: string[] = [PREVIEW_MARKER, `### Architecture preview · ${cell(preview.title)}`, '']
+
+  const counts = VERBS.filter(([key]) => changes[key].length > 0).map(
+    ([key, verb]) => `${verb} ${changes[key].length}`,
+  )
+  const total = VERBS.reduce((n, [key]) => n + changes[key].length, 0)
+  if (total === 0) {
+    out.push('This plan changes no resources.', '')
+  } else {
+    const what = counts.length === 1 ? counts[0] : `changes ${resources(total)}: it ${listSentence(counts)}`
+    out.push(`**This plan ${counts.length === 1 ? `${what} ${total === 1 ? 'resource' : 'resources'}` : what}.**`, '')
+  }
+
+  // Replace and destroy are the two verbs a reviewer cannot take back after
+  // the merge, so they are named above the picture rather than inside it.
+  const lossy = [
+    ...changes.replace.map((id) => `${code(id)} is replaced: destroyed, then created again.`),
+    ...changes.destroy.map((id) => `${code(id)} is destroyed.`),
+  ]
+  if (lossy.length) {
+    out.push('> [!WARNING]', ...lossy.map((line) => `> - ${line}`), '>', '> Whatever these hold does not carry over unless it is backed up.', '')
+  }
+
+  if (ctx.diagram) {
+    out.push('```mermaid', ctx.diagram.trimEnd(), '```', '')
+    const legend = 'Outlined violet: create · cyan: update · amber: replace · dashed red: destroy.'
+    out.push(
+      ctx.neighbours === false
+        ? `${legend} Only the changed resources are drawn; with their neighbours the picture was too large to read.`
+        : `${legend} Unmarked resources are drawn because a change is wired to them.`,
+      '',
+    )
+  } else if (total > MAX_DIAGRAM_NODES) {
+    out.push(`_${resources(total)} change, too many to draw in one picture. The full list is below._`, '')
+  }
+
+  if (design) {
+    out.push('#### Against the committed design', '')
+    const items = [
+      ...design.createdNotDeclared.map((id) => `- ${code(id)} is created here but is not in the model.`),
+      ...design.destroyedButDeclared.map((id) => `- ${code(id)} is in the model but this plan destroys it.`),
+    ]
+    if (items.length) {
+      out.push(...items, '', 'If these are intended, update the model in this pull request so the design stays true.')
+    } else {
+      out.push('Nothing this plan creates or destroys departs from the model.')
+    }
+    const { entities, edges } = design.beforePlan
+    const already = entities.added.length + entities.removed.length + entities.changed.length + edges.added + edges.removed
+    if (already > 0) {
+      out.push(
+        '',
+        `_${already} ${already === 1 ? 'difference' : 'differences'} from the model ${already === 1 ? 'was' : 'were'} already there before this plan. \`driftwood reconcile\` lists them._`,
+      )
+    }
+    out.push('')
+  }
+
+  if (total > 0) {
+    out.push(`<details><summary>Every change (${total})</summary>`, '', '| Action | Resource | Kind | Name |', '|---|---|---|---|')
+    for (const [key] of VERBS) {
+      for (const id of changes[key]) {
+        const e = ctx.entities?.get(id)
+        out.push(`| ${key} | ${cell(id)} | ${cell(e?.kind ?? '')} | ${cell(e?.name ?? '')} |`)
+      }
+    }
+    const { added, removed } = changes.edges
+    if (added.length || removed.length) {
+      out.push('', `Relationships: ${added.length} added, ${removed.length} removed.`)
+    }
+    out.push('', '</details>', '')
+  }
+
+  out.push('<sub>Drawn by driftwood from this pull request\'s Terraform plan. Nothing was applied.</sub>', '')
+  return out.join('\n')
+}

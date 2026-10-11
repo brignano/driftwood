@@ -122,3 +122,30 @@ describe('the snapshot-after-deploy template', () => {
     expect(template).not.toContain('contents: write')
   })
 })
+
+describe('the plan-preview template', () => {
+  const template = readFileSync(new URL('../examples/plan-preview.yml', import.meta.url), 'utf8')
+
+  it('uses flags the CLI actually has', () => {
+    const cli = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8')
+    for (const flag of ['--plan', '--model', '--title', '--out-dir']) {
+      expect(template).toContain(flag)
+      expect(cli, `the template passes ${flag}, which the CLI no longer defines`).toMatch(new RegExp(`'(-\\w, )?${flag} <`))
+    }
+    expect(template).toContain('driftwood preview')
+    expect(template).toContain('preview/comment.md')
+  })
+
+  it('finds its earlier comment by the marker the comment really starts with', async () => {
+    const { PREVIEW_MARKER } = await import('../src/preview.js')
+    expect(template).toContain(`startswith("${PREVIEW_MARKER}")`)
+  })
+
+  it('plans without taking the state lock, and never uploads the plan', () => {
+    // Taking the lock is a write; the plan JSON can hold secrets in plain text.
+    expect(template).toContain('-lock=false')
+    expect(template).not.toContain('upload-artifact')
+    expect(template).toContain('contents: read')
+    expect(template).not.toContain('contents: write')
+  })
+})

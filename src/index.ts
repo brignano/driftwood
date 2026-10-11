@@ -31,11 +31,23 @@ export {
 export type { Provider, ProviderContext, ProviderKind } from './providers/index.js'
 export { renderers, render, resolveRenderer } from './render/index.js'
 export { defineRenderer } from './render/types.js'
-export type { Renderer, RenderContext, Availability } from './render/types.js'
+export type { Renderer, RenderContext, Availability, ChangeMark } from './render/types.js'
 
 // Built-in providers
-export { importTerraformState, parseTerraformState } from './providers/terraform.js'
-export type { ImportOptions } from './providers/terraform.js'
+export { importTerraformState, parseTerraformState, stateFromValues, resourceAddress } from './providers/terraform.js'
+export type { ImportOptions, TfValues, TfValuesModule, TfValuesResource } from './providers/terraform.js'
+export {
+  previewPlan,
+  parseTerraformPlan,
+  formatPreviewComment,
+  PlanPreview,
+  PlanChanges,
+  PlanDesign,
+  PREVIEW_MARKER,
+  COMMENT_FILE,
+  PREVIEW_FILE,
+} from './preview.js'
+export type { TfPlan, TfResourceChange, PreviewOptions, PreviewResult, CommentContext } from './preview.js'
 export { toModel as dynatraceToModel } from './providers/dynatrace.js'
 
 // Renderers

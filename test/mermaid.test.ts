@@ -80,6 +80,31 @@ describe('renderMermaid', () => {
   })
 })
 
+describe('renderMermaid overlays', () => {
+  it('marks pending changes with outlines and a label, for visible entities only', () => {
+    const out = renderMermaid(model, {
+      view: 'storage-only',
+      marks: { 'aws_s3_bucket.emails': 'destroy', 'aws_lambda_function.fn': 'create' },
+    })
+    expect(out).toContain('class n_aws_s3_bucket_emails mark_destroy;')
+    expect(out).toContain('- destroy')
+    expect(out).toContain('stroke-dasharray')
+    // Outside the view: no class line and no unused classDef.
+    expect(out).not.toContain('mark_create')
+  })
+
+  it('shows markup in a name as text', () => {
+    const hostile = Model.parse({
+      version: 1,
+      name: 'x',
+      entities: [{ id: 'b', kind: 'aws_s3_bucket', name: '<img src=x onerror=alert(1)> & "q"' }],
+    })
+    const out = renderMermaid(hostile)
+    expect(out).toContain('&lt;img src=x onerror=alert(1)&gt; &amp; &quot;q&quot;<br/>')
+    expect(out).not.toContain('<img')
+  })
+})
+
 describe('selectEntities', () => {
   it('returns everything when no view is given', () => {
     expect(selectEntities(model)).toHaveLength(4)

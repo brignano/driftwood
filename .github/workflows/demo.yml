@@ -14,6 +14,11 @@
 # Snapshots render SVG (bundled Graphviz), which the viewer makes interactive.
 # A job summary cannot show an image from an artifact, so the summary step adds
 # one view rendered as Mermaid, which GitHub draws in place.
+#
+# The second job is the step before a deploy: a Terraform plan for the same
+# platform, drawn as the comment a reviewer sees on the pull request. On a pull
+# request from this repository it posts that comment here, edited in place on
+# every push; elsewhere it writes it to the job summary only.
 
 name: Post-deploy demo
 
@@ -127,3 +132,55 @@ jobs:
           name: driftwood-snapshots
           path: snapshots
           retention-days: 7
+
+  plan-preview:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      # The example plan creates a payments queue, updates the orders API,
+      # replaces the database and destroys an alarm.
+      - name: Draw the plan as a pull request comment
+        run: |
+          npx tsx src/cli.ts preview \
+            --plan examples/orders-platform.plan.json \
+            --model examples/architecture.yaml \
+            --title 'orders-platform (example plan)' \
+            --out-dir preview
+          cat preview/comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: The preview must say what a reviewer needs
+        run: |
+          p=preview/preview.json
+          head -n 1 preview/comment.md | grep -qx '<!-- driftwood:plan-preview -->'
+          grep -q '```mermaid' preview/comment.md
+          jq -e '.changes.replace == ["aws_db_instance.orders"]' "$p"
+          jq -e '.changes.destroy == ["aws_cloudwatch_metric_alarm.dlq_depth"]' "$p"
+          jq -e '.changes.create | index("aws_sqs_queue.payments")' "$p"
+          # The new queue is not in the committed model; the review must hear it.
+          jq -e '.design.createdNotDeclared | index("aws_sqs_queue.payments")' "$p"
+          # Data loss is named above the picture, not left for the reader to spot.
+          test "$(grep -n '\[!WARNING\]' preview/comment.md | cut -d: -f1)" -lt "$(grep -n '```mermaid' preview/comment.md | cut -d: -f1)"
+
+      # Forks get a read-only token, so they keep the job summary only.
+      - name: Post or update the comment
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENTS: repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+        run: |
+          id=$(gh api "$COMMENTS" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- driftwood:plan-preview -->")) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$id" -F body=@preview/comment.md > /dev/null
+          else
+            gh api "$COMMENTS" -F body=@preview/comment.md > /dev/null
+          fi
