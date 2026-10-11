@@ -364,6 +364,48 @@ It needs `s3:GetObject` on that one object, plus `kms:Decrypt` if the bucket use
 
 **Still missing:** a live cloud API by account. It would catch changes made outside Terraform entirely.
 
+### Show it on the build page
+
+`observe` hands facts to the repository that holds the model. `snapshot` is for the other audience: the person who just deployed. Run it as the last step of a deploy, from any CI system or build tool, and it writes a directory a build page can show as is:
+
+```bash
+driftwood snapshot --terraform /tmp/state.json \
+  --app orders-api --env prod --build $BUILD_ID \
+  --model architecture.yaml \
+  --store snapshots/ \
+  --origin commit=$GIT_SHA
+```
+
+```
+snapshots/
+  orders-api/
+    prod/
+      latest.json          {"latest": "412", "observedAt": "...", "build": "412"}
+      411/
+      412/
+        snapshot.json      what was deployed, what this deploy changed, drift from the design, health
+        summary.md         markdown for a CI job summary; Mermaid diagrams are inlined
+        diagram.svg        the whole estate
+        diagram-<view>.svg one per view in the committed model
+  payments/
+    prod/
+    staging/
+```
+
+**Many apps, one store.** Every snapshot records the app, environment and build it is of, and a store files it by those three. A platform shows an app's current picture by reading `<app>/<env>/latest.json` and the directory it names, and its history by listing `<app>/<env>/`. The same layout works as an S3 prefix or an artifact repository path: driftwood writes the directory locally, and the pipeline uploads it, so driftwood never needs write credentials for anything. `latest.json` only ever moves forward, so a slow pipeline that finishes after a newer one cannot make the platform show a stale picture.
+
+With `--store`, each deploy is compared against the latest snapshot of the same app and environment, found automatically. Without a store, `-o <dir>` writes one snapshot and `--previous <dir>` names what to compare against. Either way, comparing against a different app or environment is refused, because it would report everything as changed.
+
+Every input except the state is optional, and each one adds a section:
+
+- **`--model`** lends the snapshot the committed model's hand-written views, and reports how far this deploy sits from that design. Only the views and aliases are borrowed, so the diagrams still show what is actually deployed.
+- **A previous snapshot**, from `--store` or `--previous`, reports what this deploy added, removed and changed. The first deploy has no previous snapshot, and that is not an error. The committed model's `coverage` applies here too, so a resource the deploy role cannot see is never reported as removed by this deploy.
+- **`--health`** colours the diagrams, exactly as `render --health` does.
+
+`snapshot` exits 0 when it finds drift. It runs after a deploy, and a reporting step that fails the deploy gets switched off. `reconcile` remains the gate. A provider that cannot answer still fails, because a half-empty snapshot would show everything as removed.
+
+`snapshot.json` is versioned (`"snapshot": 1`) and its schema is exported as `Snapshot`, so a build platform can read it without running driftwood. A Node host can skip the files entirely and call `takeSnapshot()`, which returns the same snapshot and diagrams in memory.
+
 ## Extensible by design
 
 Providers and renderers are both registries. A third-party plugin registers exactly the way a built-in does — there is no separate plugin API.
@@ -475,9 +517,10 @@ src/
   render/graphviz.ts     SVG via native dot or WASM, with tier detection
   model/apply.ts         writes observed drift back, preserving comments and hand edits
   model/observation.ts   the observe/consume envelope, with provenance and an age
+  snapshot.ts            post-deploy bundle and its per-app store: diagrams, changes, drift summary
   reconcile/index.ts     declared vs observed -> drift report
   config.ts              driftwood.config.yaml
-  cli.ts                 validate · render · engines · providers · import · observe · reconcile
+  cli.ts                 validate · render · engines · providers · import · observe · snapshot · reconcile
 examples/                a worked 45-resource AWS platform, a drifted copy, a config,
                          and two workflows to copy (drift-PR, observe-publish)
 scripts/render-docs.ts   regenerates docs/ and the README's embedded render
@@ -488,7 +531,7 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 178 tests
+npm test        # 234 tests
 npm run typecheck
 npm run build
 ```
@@ -512,6 +555,7 @@ Built:
 - [x] Blind spots suppress deletions — unknown is reported as unknown, never as absent
 - [x] Drift written back as a reviewable pull request, comments and hand edits intact
 - [x] `observe` splits capture from reconciliation, so the deploy and the model can live apart
+- [x] `snapshot` packages a deploy for a build page: diagrams, what changed since the last deploy, and drift from the design
 
 Deliberately not built yet, roughly in order:
 

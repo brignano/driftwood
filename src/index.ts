@@ -67,3 +67,26 @@ export { loadConfig, observeAll, makeContext, Config } from './config.js'
 export type { LoadedConfig, ObserveResult } from './config.js'
 export { parseHealthMap, loadHealthMap, unknownHealthIds, HealthStatus } from './health.js'
 export type { HealthMap } from './health.js'
+
+// Snapshots — what a deploy left behind, packaged for a build page
+export {
+  Snapshot,
+  SnapshotChanges,
+  SnapshotDrift,
+  SnapshotDiagram,
+  SnapshotFieldChange,
+  SnapshotSubject,
+  LatestPointer,
+  SNAPSHOT_FILE,
+  LATEST_FILE,
+  SUMMARY_FILE,
+  takeSnapshot,
+  parseSnapshot,
+  loadPreviousSnapshot,
+  writeSnapshot,
+  writeToStore,
+  loadLatestSnapshot,
+  subjectDir,
+  formatSnapshotSummary,
+} from './snapshot.js'
+export type { SnapshotOptions, SnapshotBundle, SnapshotParseResult, StoreResult } from './snapshot.js'
