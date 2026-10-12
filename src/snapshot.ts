@@ -181,7 +181,8 @@ function changesSince(previous: Snapshot, current: Model, declared?: Model): Sna
   }
 }
 
-function driftFrom(declared: Model, observed: Model): SnapshotDrift {
+/** Distance from the committed model, summarised by entity id. Shared with the plan preview. */
+export function driftFrom(declared: Model, observed: Model): SnapshotDrift {
   const drift = reconcile(declared, observed)
   return {
     hasDrift: drift.hasDrift,

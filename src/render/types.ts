@@ -12,7 +12,27 @@ export interface RenderContext {
    * post-processing step to turn a marker into a picture.
    */
   icons?: boolean
+  /**
+   * What a pending change will do to each entity, by id, using Terraform's own
+   * verbs. Like health, an overlay applied at render time. Only Mermaid draws
+   * it today, because a plan preview is posted where Mermaid renders in place.
+   */
+  marks?: Record<string, ChangeMark>
+  /**
+   * Relationships a pending change adds or removes. A removed one must still
+   * be in the model to be drawn, and is drawn dashed, so a picture of the
+   * plan never shows a dependency that is going away as one that stays.
+   */
+  edgeMarks?: EdgeMark[]
 }
+
+export interface EdgeMark {
+  from: string
+  to: string
+  mark: 'added' | 'removed'
+}
+
+export type ChangeMark = 'create' | 'update' | 'replace' | 'destroy'
 
 export interface Availability {
   available: boolean

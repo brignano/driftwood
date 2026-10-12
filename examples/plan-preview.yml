@@ -1,0 +1,74 @@
+# Draws what a Terraform plan will change, as one comment on the pull request.
+#
+# Reviewers see the resources a change creates, updates, replaces or destroys,
+# drawn with what they are wired to, before anyone approves the apply. The
+# comment is edited in place on every push, so a busy pull request carries one
+# preview rather than one per commit.
+#
+# Like the other templates, nothing here is Actions-specific: any CI that can
+# run `terraform plan` and post a comment can run the same three steps.
+
+name: Architecture preview
+
+on:
+  pull_request:
+    paths:
+      - '**.tf'
+      - architecture.yaml
+
+permissions:
+  contents: read
+  # To post the one preview comment and edit it on later pushes.
+  pull-requests: write
+  # For the cloud credentials `terraform plan` reads with.
+  id-token: write
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g @brignano/driftwood
+
+      # ... configure read-only cloud credentials here, the same ones the
+      # drift workflow uses. A plan only reads.
+
+      # -lock=false because taking the state lock is a write, and this job has
+      # no business holding it. plan.json can contain sensitive values in plain
+      # text, so it stays on the runner: never upload it as an artifact. The
+      # comment carries resource addresses, kinds and names only.
+      - name: Plan
+        run: |
+          terraform init -input=false
+          terraform plan -input=false -lock=false -out=tfplan
+          terraform show -json tfplan > "$RUNNER_TEMP/plan.json"
+
+      # Exits 0 whatever the plan does. The preview informs the review;
+      # `driftwood reconcile` is the gate.
+      - name: Draw the preview
+        run: |
+          driftwood preview \
+            --plan "$RUNNER_TEMP/plan.json" \
+            --model architecture.yaml \
+            --title "${{ github.event.repository.name }}" \
+            --out-dir preview
+          cat preview/comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      # The comment starts with a marker line; find the earlier one by it and
+      # edit it, or post the first.
+      - name: Post or update the comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMENTS: repos/${{ github.repository }}/issues/${{ github.event.pull_request.number }}/comments
+        run: |
+          id=$(gh api "$COMMENTS" --paginate \
+            --jq '.[] | select(.body | startswith("<!-- driftwood:plan-preview -->")) | .id' | head -n 1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/${{ github.repository }}/issues/comments/$id" -F body=@preview/comment.md > /dev/null
+          else
+            gh api "$COMMENTS" -F body=@preview/comment.md > /dev/null
+          fi

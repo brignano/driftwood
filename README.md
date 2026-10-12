@@ -106,6 +106,8 @@ npx tsx src/cli.ts import terraform examples/orders-platform.tfstate.json \
 
 Entity ids are Terraform addresses (`aws_s3_bucket.assets`). That's deliberate: the address is stable across plans, readable in a diff, and sidesteps the identity-resolution problem that kills CMDBs. Edges come from Terraform's own `dependencies`.
 
+The raw state file and the output of `terraform show -json` both work, and produce the same model. A resource with `count` or `for_each` is one entity, not one per instance.
+
 The worked example in `examples/` is a fictional e-commerce platform — CloudFront and Route 53 at the edge, an ALB in front of two ECS services, Postgres, Redis, DynamoDB and S3 behind them, and an SQS/SNS order pipeline with a Lambda worker. 45 resources: enough that the view mechanism is doing real work rather than decorating a diagram that fits on a page anyway.
 
 ### Validate
@@ -364,6 +366,29 @@ It needs `s3:GetObject` on that one object, plus `kms:Decrypt` if the bucket use
 
 **Still missing:** a live cloud API by account. It would catch changes made outside Terraform entirely.
 
+### Show it on the pull request
+
+`snapshot` says what a deploy did after the fact. `preview` says what a Terraform plan will do while it can still be changed, as a comment on the pull request that proposes it:
+
+```bash
+terraform plan -lock=false -out=tfplan
+terraform show -json tfplan > plan.json
+driftwood preview --plan plan.json --model architecture.yaml --out-dir preview
+```
+
+`preview/comment.md` leads with one line a reviewer can read at a glance ("This plan changes 6 resources: it creates 2, replaces 1, updates 2 and destroys 1."), then:
+
+- **a warning above everything else** naming each resource the plan replaces or destroys, since those are the changes nobody can take back after the merge;
+- **a Mermaid diagram**, which GitHub draws in place, of the resources the plan touches. Each is outlined in its own colour and labelled with Terraform's own symbol (`+ create`, `~ update`, `-/+ replace`, `- destroy`). New relationships are thick arrows and ones going away are dashed. The only unchanged resources drawn are the other ends of those relationships and whatever depends on something the plan replaces or destroys, so the picture shows what the change touches rather than everything nearby. Resources the committed model ignores, such as log groups, are left out;
+- with `--model`, **what the plan does to the design**: resources it creates that the model does not declare, and declared resources it destroys, so the model can be updated in the same pull request. Drift that was already there is counted, not blamed on this plan;
+- the full list of changes, folded away.
+
+It reads the plan's JSON and nothing else: no credentials, no network, no apply. Edges for the resources the plan touches come from the plan's configuration, because that is what they will depend on afterwards; untouched resources keep the edges their state recorded. `preview` exits 0 whatever the plan does. The review decides, and `reconcile` is the gate.
+
+`examples/plan-preview.yml` runs it on every pull request that touches Terraform, and edits one comment in place on each push rather than adding one per commit. The comment's first line is a marker the workflow finds it by. `plan.json` can hold sensitive values in plain text, so the template never uploads it; the comment carries resource addresses, kinds and names only.
+
+**See it run.** The `plan-preview` job in the [demo workflow](.github/workflows/demo.yml) draws [an example plan](examples/orders-platform.plan.json) for the example platform, which adds a payments queue, updates the orders API, replaces the database and destroys an alarm, and posts it on pull requests in this repository.
+
 ### Show it on the build page
 
 `observe` hands facts to the repository that holds the model. `snapshot` is for the other audience: the person who just deployed. Run it as the last step of a deploy, from any CI system or build tool, and it writes a directory a build page can show as is:
@@ -530,14 +555,15 @@ src/
   render/graphviz.ts     SVG via native dot or WASM, with tier detection
   model/apply.ts         writes observed drift back, preserving comments and hand edits
   model/observation.ts   the observe/consume envelope, with provenance and an age
+  preview.ts             a Terraform plan drawn as a pull request comment
   snapshot.ts            post-deploy bundle and its per-app store: diagrams, changes, drift summary
   viewer.ts              the self-contained page in every snapshot, with blast radius
   reconcile/index.ts     declared vs observed -> drift report
   config.ts              driftwood.config.yaml
-  cli.ts                 validate · render · engines · providers · import · observe · snapshot · reconcile
-examples/                a worked 45-resource AWS platform, a drifted copy, a config,
-                         and three workflows to copy (drift-PR, observe-publish,
-                         snapshot-after-deploy)
+  cli.ts                 validate · render · engines · providers · import · observe · preview · snapshot · reconcile
+examples/                a worked 45-resource AWS platform, a drifted copy, a plan,
+                         a config, and four workflows to copy (drift-PR,
+                         observe-publish, plan-preview, snapshot-after-deploy)
 scripts/render-docs.ts   regenerates docs/ and the README's embedded render
 docs/                    committed renders of the example, kept current by CI
 .claude/skills/          add-provider and add-renderer walkthroughs for agents
@@ -546,7 +572,7 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 247 tests
+npm test        # 288 tests
 npm run typecheck
 npm run build
 ```
@@ -571,13 +597,14 @@ Built:
 - [x] Drift written back as a reviewable pull request, comments and hand edits intact
 - [x] `observe` splits capture from reconciliation, so the deploy and the model can live apart
 - [x] `snapshot` packages a deploy for a build page: diagrams, what changed since the last deploy, and drift from the design
+- [x] An interactive page in every snapshot, with blast radius
+- [x] `preview` draws a Terraform plan on its pull request, before anything is applied
 
 Deliberately not built yet, roughly in order:
 
 - [ ] Live cloud API providers (AWS, GCP) to catch resources no IaC owns
 - [ ] A Splunk provider (the extension point is ready; no implementation shipped yet)
 - [ ] Preserve human/agent annotations across regeneration
-- [ ] Interactive viewer, blast-radius traversal
 - [ ] 3D — last, optional, and only if someone actually asks
 
 **On 3D:** it's the reward, not the plan. Netflix's Vizceral was the flagship of exactly this concept and is effectively abandoned; Cloudcraft deliberately stopped at 2.5D isometric because it stays readable and screenshot-able. 3D topology demos brilliantly and then goes unused during incidents — it occludes, doesn't diff, doesn't paste into a postmortem, and needs a mouse. Build the model first and a 3D view stays cheap to add later.
