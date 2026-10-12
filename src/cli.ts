@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { createRequire } from 'node:module'
 import { Command } from 'commander'
 import { dumpModel, loadModel } from './model/validate.js'
 import { importTerraformState, parseTerraformState } from './providers/terraform.js'
@@ -22,7 +23,8 @@ const program = new Command()
 program
   .name('driftwood')
   .description('Architecture as code, reconciled with live infrastructure.')
-  .version('0.0.1')
+  // Read from package.json, one level up from both src/ and dist/, so it cannot drift from the release.
+  .version((createRequire(import.meta.url)('../package.json') as { version: string }).version)
 
 /**
  * The source text comes back alongside the parsed model because `--write-model`

@@ -226,7 +226,8 @@ function configuredDependencies(plan: TfPlan): Map<string, Set<string>> {
  * The model once the plan is applied. Entities come from `planned_values`.
  * Edges of untouched resources come from the prior state, which recorded
  * them; edges of resources the plan touches come from the configuration,
- * because that is what they will depend on afterwards.
+ * because that is what they will depend on afterwards, plus any recorded edge
+ * the new graph still reaches.
  */
 function afterModel(plan: TfPlan, before: Model, touched: Set<string>, includeDataSources: boolean): Model {
   const after = importTerraformState(stateFromValues(plan.planned_values), {
@@ -249,6 +250,29 @@ function afterModel(plan: TfPlan, before: Model, touched: Set<string>, includeDa
   }
   if (configured) {
     for (const id of touched) for (const to of configured.get(id) ?? []) push(id, to)
+    // State records every dependency, transitive ones included, where the
+    // configuration names only direct references. A touched resource's state
+    // edge therefore still holds if its target is reachable through the new
+    // graph; dropping it would draw `api -> vpc` going away when `api -> db ->
+    // vpc` is untouched.
+    const out = new Map<string, string[]>()
+    for (const e of edges) out.set(e.from, [...(out.get(e.from) ?? []), e.to])
+    const reachable = (from: string): Set<string> => {
+      const seenFrom = new Set<string>()
+      const queue = [...(out.get(from) ?? [])]
+      while (queue.length) {
+        const next = queue.shift()!
+        if (seenFrom.has(next)) continue
+        seenFrom.add(next)
+        queue.push(...(out.get(next) ?? []))
+      }
+      return seenFrom
+    }
+    for (const id of touched) {
+      if (!configured.has(id)) continue
+      const still = reachable(id)
+      for (const e of before.edges) if (e.from === id && still.has(e.to)) push(e.from, e.to)
+    }
   }
   after.edges = edges.sort((a, b) => (a.from + a.to).localeCompare(b.from + b.to))
   return after
