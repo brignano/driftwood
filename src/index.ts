@@ -31,7 +31,7 @@ export {
 export type { Provider, ProviderContext, ProviderKind } from './providers/index.js'
 export { renderers, render, resolveRenderer } from './render/index.js'
 export { defineRenderer } from './render/types.js'
-export type { Renderer, RenderContext, Availability, ChangeMark } from './render/types.js'
+export type { Renderer, RenderContext, Availability, ChangeMark, EdgeMark } from './render/types.js'
 
 // Built-in providers
 export { importTerraformState, parseTerraformState, stateFromValues, resourceAddress } from './providers/terraform.js'

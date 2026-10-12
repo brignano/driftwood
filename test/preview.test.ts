@@ -144,20 +144,29 @@ describe('previewPlan on the example plan', () => {
     expect(comment).toContain('`aws_db_instance.orders` is replaced')
   })
 
-  it('draws the changed resources marked, with their neighbours', () => {
+  it('draws the changed resources marked, with only the neighbours a reviewer needs', () => {
     expect(diagram).toContain('class n_aws_db_instance_orders mark_replace;')
     expect(diagram).toContain('class n_aws_cloudwatch_metric_alarm_dlq_depth mark_destroy;')
     expect(diagram).toContain('-/+ replace')
-    // Wired to the replaced database, unchanged, drawn for context.
-    expect(diagram).toContain('n_aws_db_subnet_group_orders')
-    expect(diagram).not.toContain('class n_aws_db_subnet_group_orders mark_')
-    // Far from every change: not drawn.
+    // The other end of a relationship this plan adds, unchanged itself.
+    expect(diagram).toContain('n_aws_sns_topic_order_events')
+    expect(diagram).not.toContain('class n_aws_sns_topic_order_events mark_')
+    // What a changed resource merely depends on is not news: the database's subnet group.
+    expect(diagram).not.toContain('n_aws_db_subnet_group_orders')
     expect(diagram).not.toContain('n_aws_route53_zone_primary')
   })
 
-  it('leaves out neighbours the committed model ignores', () => {
-    // Log groups are ignored by the example model; one sits next to the updated ECS service.
-    expect(diagram).not.toContain('aws_cloudwatch_log_group')
+  it('draws a relationship going away dashed, and a new one thick', () => {
+    expect(diagram).toContain('n_aws_cloudwatch_metric_alarm_dlq_depth -.-> n_aws_sqs_queue_orders_dlq')
+    expect(diagram).toContain('n_aws_sns_topic_subscription_payments ==> n_aws_sqs_queue_payments')
+    // An unchanged relationship stays plain.
+    expect(diagram).toContain('n_aws_db_instance_orders --> n_aws_kms_key_data')
+  })
+
+  it('never puts a hex colour right before a semicolon in a link style, which Mermaid reads as an entity', () => {
+    for (const line of diagram!.split('\n').filter((l) => l.includes('linkStyle'))) {
+      expect(line).not.toMatch(/#[0-9a-f]+;/i)
+    }
   })
 
   it('lists every change in a folded table', () => {
@@ -263,14 +272,25 @@ describe('previewPlan edge cases', () => {
     expect(comment).toContain('**This plan creates 1 resource.**')
   })
 
+  it('draws whatever depends on a destroyed resource, except what the model ignores', () => {
+    const db = res('aws_db_instance.main')
+    const api = res('aws_ecs_service.api', { depends_on: ['aws_db_instance.main'] })
+    const logs = { ...res('aws_cloudwatch_log_group.db'), depends_on: ['aws_db_instance.main'] }
+    const model = Model.parse({ version: 1, name: 'x', ignore: { kinds: ['aws_cloudwatch_log_group'] } })
+    const { diagram } = previewPlan(plan([db, api, logs], [api, logs], [['aws_db_instance.main', ['delete']]]), {
+      declared: model,
+    })
+    expect(diagram).toContain('n_aws_ecs_service_api')
+    expect(diagram).not.toContain('n_aws_cloudwatch_log_group_db')
+  })
+
   it('draws only the changed resources when their neighbours would crowd the picture', () => {
-    const hub = res('aws_vpc.hub')
-    const spokes = Array.from({ length: 30 }, (_, i) => res(`aws_subnet.s${i}`, { depends_on: ['aws_vpc.hub'] }))
-    const changed = Array.from({ length: 12 }, (_, i) => res(`aws_instance.i${i}`, { depends_on: [`aws_subnet.s${i}`] }))
-    const leaves = Array.from({ length: 30 }, (_, i) => res(`aws_eip.e${i}`, { depends_on: [`aws_instance.i${i % 12}`] }))
-    const all = [hub, ...spokes, ...changed, ...leaves]
+    const changed = Array.from({ length: 12 }, (_, i) => res(`aws_instance.i${i}`))
+    const dependants = Array.from({ length: 36 }, (_, i) =>
+      res(`aws_eip.e${i}`, { depends_on: [`aws_instance.i${i % 12}`] }),
+    )
     const { comment, diagram } = previewPlan(
-      plan(all, all, changed.map((r) => [r.address!, ['update']] as [string, string[]])),
+      plan([...changed, ...dependants], dependants, changed.map((r) => [r.address!, ['delete']] as [string, string[]])),
     )
     expect(diagram).toContain('n_aws_instance_i0')
     expect(diagram).not.toContain('n_aws_eip_')

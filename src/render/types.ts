@@ -18,6 +18,18 @@ export interface RenderContext {
    * it today, because a plan preview is posted where Mermaid renders in place.
    */
   marks?: Record<string, ChangeMark>
+  /**
+   * Relationships a pending change adds or removes. A removed one must still
+   * be in the model to be drawn, and is drawn dashed, so a picture of the
+   * plan never shows a dependency that is going away as one that stays.
+   */
+  edgeMarks?: EdgeMark[]
+}
+
+export interface EdgeMark {
+  from: string
+  to: string
+  mark: 'added' | 'removed'
 }
 
 export type ChangeMark = 'create' | 'update' | 'replace' | 'destroy'

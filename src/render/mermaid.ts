@@ -113,12 +113,22 @@ export function renderMermaid(model: Model, opts: RenderOptions = {}): string {
   }
   for (const e of ungrouped) lines.push(`    ${renderNode(e, opts.marks?.[e.id])}`)
 
-  // An edge is only drawn when both ends survived the view filter.
+  // An edge is only drawn when both ends survived the view filter. Mermaid
+  // styles links by their position, so the index of each marked one is kept.
+  const edgeMarks = new Map((opts.edgeMarks ?? []).map((m) => [`${m.from}\u0000${m.to}`, m.mark]))
+  const linkStyles: string[] = []
+  let index = 0
   for (const edge of model.edges) {
     if (!visible.has(edge.from) || !visible.has(edge.to)) continue
     const label = edge.label ? `|"${escapeLabel(edge.label)}"|` : ''
-    lines.push(`    ${nodeId(edge.from)} -->${label} ${nodeId(edge.to)}`)
+    const mark = edgeMarks.get(`${edge.from}\u0000${edge.to}`)
+    const arrow = mark === 'removed' ? '-.->' : mark === 'added' ? '==>' : '-->'
+    lines.push(`    ${nodeId(edge.from)} ${arrow}${label} ${nodeId(edge.to)}`)
+    // No hex colour right before a `;`: Mermaid reads `#7c3aed;` as an entity code.
+    if (mark) linkStyles.push(`    linkStyle ${index} stroke:${mark === 'added' ? '#7c3aed' : '#dc2626'},stroke-width:2px`)
+    index++
   }
+  lines.push(...linkStyles)
 
   // Family colours, matching the Graphviz renderer's palette. Emitted before
   // the health overlay so that health, being the more urgent fact, wins.

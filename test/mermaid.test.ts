@@ -93,6 +93,12 @@ describe('renderMermaid overlays', () => {
     expect(out).not.toContain('mark_create')
   })
 
+  it('draws marked edges by kind and styles them by position', () => {
+    const out = renderMermaid(model, { edgeMarks: [{ from: 'aws_lambda_function.fn', to: 'aws_s3_bucket.emails', mark: 'removed' }] })
+    expect(out).toContain('n_aws_lambda_function_fn -.-> n_aws_s3_bucket_emails')
+    expect(out).toContain('linkStyle 0 stroke:#dc2626,stroke-width:2px')
+  })
+
   it('shows markup in a name as text', () => {
     const hostile = Model.parse({
       version: 1,

@@ -379,7 +379,7 @@ driftwood preview --plan plan.json --model architecture.yaml --out-dir preview
 `preview/comment.md` leads with one line a reviewer can read at a glance ("This plan changes 6 resources: it creates 2, replaces 1, updates 2 and destroys 1."), then:
 
 - **a warning above everything else** naming each resource the plan replaces or destroys, since those are the changes nobody can take back after the merge;
-- **a Mermaid diagram**, which GitHub draws in place, of the resources the plan touches and what they are wired to. Each changed resource is outlined in its own colour and labelled with Terraform's own symbol (`+ create`, `~ update`, `-/+ replace`, `- destroy`). Neighbours the committed model ignores, such as log groups, are left out;
+- **a Mermaid diagram**, which GitHub draws in place, of the resources the plan touches. Each is outlined in its own colour and labelled with Terraform's own symbol (`+ create`, `~ update`, `-/+ replace`, `- destroy`). New relationships are thick arrows and ones going away are dashed. The only unchanged resources drawn are the other ends of those relationships and whatever depends on something the plan replaces or destroys, so the picture shows what the change touches rather than everything nearby. Resources the committed model ignores, such as log groups, are left out;
 - with `--model`, **what the plan does to the design**: resources it creates that the model does not declare, and declared resources it destroys, so the model can be updated in the same pull request. Drift that was already there is counted, not blamed on this plan;
 - the full list of changes, folded away.
 
@@ -572,7 +572,7 @@ docs/                    committed renders of the example, kept current by CI
 ## Development
 
 ```bash
-npm test        # 285 tests
+npm test        # 288 tests
 npm run typecheck
 npm run build
 ```

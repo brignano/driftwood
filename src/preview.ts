@@ -275,8 +275,11 @@ function isIgnored(declared: Model | undefined, e: Entity): boolean {
 }
 
 /**
- * The part of the estate the plan touches, plus one hop around it so a
- * reviewer sees what a change is wired to. Neighbours the committed model
+ * The resources the plan touches, plus only the neighbours a reviewer needs:
+ * the other end of every relationship the plan adds or removes, and whatever
+ * depends on a resource the plan replaces or destroys, since that is what the
+ * change can break. A replaced database's subnets and KMS key are not news;
+ * the queue a new subscription feeds is. Neighbours the committed model
  * ignores (log groups, typically) are left out; changed entities never are.
  * A plan too large for one picture keeps only the changed entities.
  */
@@ -284,6 +287,7 @@ function diagramModel(
   before: Model,
   after: Model,
   marks: Map<string, ChangeMark>,
+  changed: { added: Edge[]; removed: Edge[] },
   declared: Model | undefined,
 ): { model: Model; neighbours: boolean } | undefined {
   if (marks.size === 0 || marks.size > MAX_DIAGRAM_NODES) return undefined
@@ -291,16 +295,22 @@ function diagramModel(
   for (const e of before.entities) byId.set(e.id, e)
   for (const e of after.entities) byId.set(e.id, e)
 
-  // Edges to and from destroyed entities exist only in the prior state.
-  const edges = [...after.edges, ...before.edges.filter((e) => marks.get(e.from) === 'destroy' || marks.get(e.to) === 'destroy')]
+  const key = (e: Edge) => `${e.from}\u0000${e.to}`
+  const moved = new Set([...changed.added, ...changed.removed].map(key))
+  const lossy = (id: string) => marks.get(id) === 'destroy' || marks.get(id) === 'replace'
+  // Removed relationships exist only in the prior state, so they are drawn from it.
+  const edges = [...after.edges, ...changed.removed]
   const withNeighbours = new Set(marks.keys())
+  const consider = (id: string) => {
+    const other = byId.get(id)
+    if (other && !isIgnored(declared, other)) withNeighbours.add(id)
+  }
   for (const e of edges) {
-    for (const [a, b] of [
-      [e.from, e.to],
-      [e.to, e.from],
-    ] as const) {
-      const other = byId.get(b)
-      if (marks.has(a) && other && !isIgnored(declared, other)) withNeighbours.add(b)
+    if (moved.has(key(e))) {
+      if (marks.has(e.from)) consider(e.to)
+      if (marks.has(e.to)) consider(e.from)
+    } else if (lossy(e.to)) {
+      consider(e.from)
     }
   }
   const neighbours = withNeighbours.size <= MAX_DIAGRAM_NODES
@@ -311,9 +321,8 @@ function diagramModel(
   const seen = new Set<string>()
   const kept: Edge[] = []
   for (const e of edges) {
-    const key = `${e.from}\u0000${e.to}`
-    if (!ids.has(e.from) || !ids.has(e.to) || seen.has(key)) continue
-    seen.add(key)
+    if (!ids.has(e.from) || !ids.has(e.to) || seen.has(key(e))) continue
+    seen.add(key(e))
     kept.push(e)
   }
   return { model: { ...after, entities, edges: kept, views: [] }, neighbours }
@@ -361,8 +370,14 @@ export function previewPlan(plan: TfPlan, opts: PreviewOptions = {}): PreviewRes
     design,
   })
 
-  const picture = diagramModel(before, after, marks, opts.declared)
-  const diagram = picture ? renderMermaid(picture.model, { direction: 'LR', marks: Object.fromEntries(marks) }) : undefined
+  const picture = diagramModel(before, after, marks, changes.edges, opts.declared)
+  const edgeMarks = [
+    ...changes.edges.added.map((e) => ({ from: e.from, to: e.to, mark: 'added' as const })),
+    ...changes.edges.removed.map((e) => ({ from: e.from, to: e.to, mark: 'removed' as const })),
+  ]
+  const diagram = picture
+    ? renderMermaid(picture.model, { direction: 'LR', marks: Object.fromEntries(marks), edgeMarks })
+    : undefined
   const entities = new Map([...before.entities, ...after.entities].map((e) => [e.id, e]))
   const comment = formatPreviewComment(preview, { diagram, neighbours: picture?.neighbours ?? true, entities })
   return { preview, comment, diagram }
@@ -433,11 +448,12 @@ export function formatPreviewComment(preview: PlanPreview, ctx: CommentContext =
 
   if (ctx.diagram) {
     out.push('```mermaid', ctx.diagram.trimEnd(), '```', '')
-    const legend = 'Outlined violet: create · cyan: update · amber: replace · dashed red: destroy.'
+    const legend =
+      'Outlined violet: create · cyan: update · amber: replace · dashed red: destroy. Thick violet arrows are new relationships; dashed red ones go away.'
     out.push(
       ctx.neighbours === false
         ? `${legend} Only the changed resources are drawn; with their neighbours the picture was too large to read.`
-        : `${legend} Unmarked resources are drawn because a change is wired to them.`,
+        : `${legend} Unmarked resources are drawn because this plan connects them to a change, or because they depend on something it replaces or destroys.`,
       '',
     )
   } else if (total > MAX_DIAGRAM_NODES) {
