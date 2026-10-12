@@ -353,3 +353,44 @@ describe('the comment trusts nothing it shows', () => {
     expect(comment).toContain('### Architecture preview · &lt;script&gt;x&lt;/script&gt;')
   })
 })
+
+/**
+ * Captured from Terraform 1.9.5 itself, not written by hand: a root module and
+ * a child module of `terraform_data` resources, one with `count`. The state
+ * records transitive dependencies (`api` depends on the VPC through the
+ * database), where the plan's configuration names only direct references.
+ * The plan updates `api`, adds `queue` and removes `alarm`.
+ */
+describe('real Terraform output', () => {
+  const show = JSON.parse(read('./fixtures/real.show.json'))
+  const real = parseTerraformPlan(read('./fixtures/real.plan.json'))
+
+  it('imports `terraform show -json` with modules and count collapsed', () => {
+    const model = importTerraformState(show)
+    expect(model.entities.map((e) => e.id)).toEqual([
+      'module.net.terraform_data.subnet',
+      'module.net.terraform_data.vpc',
+      'terraform_data.alarm',
+      'terraform_data.api',
+      'terraform_data.db',
+    ])
+  })
+
+  it('previews the plan with Terraform verbs', () => {
+    const { preview } = previewPlan(real)
+    expect(preview.changes).toMatchObject({
+      create: ['terraform_data.queue'],
+      update: ['terraform_data.api'],
+      replace: [],
+      destroy: ['terraform_data.alarm'],
+    })
+  })
+
+  it('does not report a transitive dependency of an updated resource as removed', () => {
+    const { preview } = previewPlan(real)
+    expect(preview.changes.edges.removed.every((e) => e.from === 'terraform_data.alarm')).toBe(true)
+    expect(preview.changes.edges.added).toEqual([
+      { from: 'terraform_data.queue', to: 'terraform_data.api', kind: 'depends-on' },
+    ])
+  })
+})
