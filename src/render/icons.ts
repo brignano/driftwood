@@ -1,3 +1,6 @@
+import { LIGHT } from '../design.js'
+import type { Swatch } from '../design.js'
+
 /**
  * Icons for rendered diagrams.
  *
@@ -31,21 +34,23 @@
  */
 export type Family = 'edge' | 'compute' | 'data' | 'messaging' | 'security' | 'observability' | 'other'
 
-export interface FamilyStyle {
-  /** Border and icon colour. */
-  accent: string
-  /** Node fill — a wash of the accent, light enough for 9pt text on top. */
-  tint: string
-}
+export type FamilyStyle = Swatch
 
+/**
+ * Families are categories, so they take the design system's categorical
+ * palette (`--chart-1…6`) in its validated order, which is what keeps
+ * neighbouring slots apart under colour-vision deficiency. `other` is not a
+ * category, so it gets the neutral `--chart-other`. Every node also carries
+ * its name, kind and icon, so colour is never the only signal.
+ */
 export const PALETTE: Record<Family, FamilyStyle> = {
-  edge: { accent: '#0284c7', tint: '#f0f9ff' },
-  compute: { accent: '#d97706', tint: '#fffbeb' },
-  data: { accent: '#059669', tint: '#ecfdf5' },
-  messaging: { accent: '#7c3aed', tint: '#f5f3ff' },
-  security: { accent: '#e11d48', tint: '#fff1f2' },
-  observability: { accent: '#475569', tint: '#f8fafc' },
-  other: { accent: '#64748b', tint: '#f8fafc' },
+  edge: LIGHT.chart[0]!,
+  compute: LIGHT.chart[1]!,
+  data: LIGHT.chart[2]!,
+  messaging: LIGHT.chart[3]!,
+  security: LIGHT.chart[4]!,
+  observability: LIGHT.chart[5]!,
+  other: LIGHT.chartOther,
 }
 
 export type IconKey =

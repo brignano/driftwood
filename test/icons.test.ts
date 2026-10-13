@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { LIGHT } from '../src/design.js'
 import { Model } from '../src/model/schema.js'
 import { renderDot } from '../src/render/dot.js'
 import { renderMermaid } from '../src/render/mermaid.js'
@@ -110,7 +111,8 @@ describe('renderDot icon markers', () => {
 
   it('lets a health overlay override the family colour without touching the model', () => {
     const dot = renderDot(m, { health: { a: 'down' } })
-    expect(dot).toContain('#dc2626')
+    expect(dot).toContain(`fillcolor="${LIGHT.danger.tint}" color="${LIGHT.danger.accent}"`)
+    expect(dot).toContain(' · down</FONT>') // never colour alone
     expect(m.entities[0]).not.toHaveProperty('health')
   })
 

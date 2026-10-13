@@ -2,6 +2,8 @@ import type { Entity, Model } from '../model/schema.js'
 import { defineRenderer } from './types.js'
 import type { RenderContext } from './types.js'
 import { selectEntities } from './select.js'
+import { LIGHT } from '../design.js'
+import type { Swatch } from '../design.js'
 import { ICON_SIZE, MARKER_PREFIX, iconFor, kindLabel, marker, styleFor } from './icons.js'
 
 /**
@@ -22,17 +24,22 @@ import { ICON_SIZE, MARKER_PREFIX, iconFor, kindLabel, marker, styleFor } from '
  * 6:1, and a graph full of 6:1 boxes is what reads as "squashed".
  */
 
-const INK = '#0f172a'
-const MUTED = '#64748b'
-const CLUSTER_LINE = '#dbe2ea'
-const CLUSTER_FILL = '#f8fafc'
-const EDGE_COLOR = '#94a3b8'
+// Every colour comes from @brignano/design; see `src/design.ts`.
+const INK = LIGHT.ink
+const MUTED = LIGHT.inkSoft
+const CLUSTER_LINE = LIGHT.lineStrong
+const CLUSTER_FILL = LIGHT.ground
+const EDGE_COLOR = LIGHT.slate
 
-/** Border and fill applied on top of the family colours when health is known. */
-const HEALTH_COLORS: Record<string, { accent: string; tint: string }> = {
-  healthy: { accent: '#16a34a', tint: '#f0fdf4' },
-  degraded: { accent: '#d97706', tint: '#fffbeb' },
-  down: { accent: '#dc2626', tint: '#fef2f2' },
+/**
+ * Border and fill applied on top of the family colours when health is known.
+ * The design system's state hues, and the state is also written into the
+ * node, because colour must never be the only signal.
+ */
+const HEALTH_COLORS: Record<string, Swatch> = {
+  healthy: LIGHT.success,
+  degraded: LIGHT.attention,
+  down: LIGHT.danger,
 }
 
 function quote(text: string): string {
@@ -69,7 +76,7 @@ export function renderDot(model: Model, ctx: RenderContext = {}): string {
 
   const lines: string[] = [
     `digraph "${quote(model.name)}" {`,
-    `  graph [rankdir=${ctx.direction === 'TD' ? 'TB' : 'LR'} fontname="Helvetica" fontsize=11 bgcolor="white"`,
+    `  graph [rankdir=${ctx.direction === 'TD' ? 'TB' : 'LR'} fontname="Helvetica" fontsize=11 bgcolor="${LIGHT.card}"`,
     '         nodesep=0.35 ranksep=0.75 pad=0.3 newrank=true];',
     '  node [shape=box style="rounded,filled" fontname="Helvetica" margin=0.06 penwidth=1.2];',
     `  edge [fontname="Helvetica" fontsize=9 fontcolor="${MUTED}" color="${EDGE_COLOR}" penwidth=1.1 arrowsize=0.7];`,
@@ -100,7 +107,8 @@ export function renderDot(model: Model, ctx: RenderContext = {}): string {
       )
     }
     rows.push(`<TR><TD><FONT POINT-SIZE="11" COLOR="${INK}"><B>${xml(e.name ?? e.id)}</B></FONT></TD></TR>`)
-    rows.push(`<TR><TD><FONT POINT-SIZE="8" COLOR="${MUTED}">${xml(kindLabel(e.kind, e.platform))}</FONT></TD></TR>`)
+    const kind = kindLabel(e.kind, e.platform) + (health ? ` · ${health}` : '')
+    rows.push(`<TR><TD><FONT POINT-SIZE="8" COLOR="${MUTED}">${xml(kind)}</FONT></TD></TR>`)
     const label = `<<TABLE BORDER="0" CELLBORDER="0" CELLSPACING="0" CELLPADDING="1">${rows.join('')}</TABLE>>`
     return (
       `${indent}"${quote(e.id)}" [label=${label} fillcolor="${style.tint}" ` +

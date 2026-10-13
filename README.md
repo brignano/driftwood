@@ -174,8 +174,8 @@ flowchart LR
     class n_aws_sns_topic_order_events f_messaging;
     class n_aws_sqs_queue_orders f_messaging;
     class n_aws_sqs_queue_orders_dlq f_messaging;
-    classDef f_compute fill:#fffbeb,stroke:#d97706,color:#0f172a;
-    classDef f_messaging fill:#f5f3ff,stroke:#7c3aed,color:#0f172a;
+    classDef f_compute fill:#fdede7,stroke:#eb6834,color:#111111;
+    classDef f_messaging fill:#fdf4e0,stroke:#eda100,color:#111111;
 ```
 <!-- /generated:async -->
 

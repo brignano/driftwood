@@ -1,3 +1,4 @@
+import { CHART_TOKENS_CSS, LIGHT, TOKENS_CSS } from './design.js'
 import type { Snapshot } from './snapshot.js'
 
 /**
@@ -37,64 +38,79 @@ function inlineSvg(svg: string): string {
   return start === -1 ? '' : svg.slice(start)
 }
 
+/**
+ * The page is styled by @brignano/design: its stylesheets are inlined ahead
+ * of this one (the page must stay self-contained) and everything below uses
+ * its tokens, so the viewer follows the system's light and dark themes and a
+ * host's `data-theme`. The diagram card is the exception: the SVGs inside it
+ * were drawn in light-theme colours, so it pins the light values of every
+ * colour an outline or label on it uses, whatever the page theme. (Pinned
+ * by value: a custom property holding `var()` resolves where it is declared.)
+ */
 const STYLE = `
+${TOKENS_CSS}
+${CHART_TOKENS_CSS}
 :root {
-  --bg: #f6f7f9; --panel: #ffffff; --ink: #0f172a; --muted: #64748b; --line: #e2e8f0;
-  --accent: #2563eb; --added: #7c3aed; --changed: #0891b2; --removed: #dc2626;
-  --affected: #dc2626; --depends: #2563eb; --warn: #d97706;
+  --panel: var(--card); --muted: var(--ink-soft); --accent: var(--i-ink);
+  --added: var(--success); --changed: var(--info); --removed: var(--danger);
+  --affected: var(--danger); --depends: var(--i); --warn: var(--attention);
 }
-/* A host that sets data-theme wins over the OS setting, in both directions. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) { --bg: #0b1120; --panel: #111827; --ink: #e5e7eb; --muted: #94a3b8; --line: #1f2937; color-scheme: dark; }
+.diagram {
+  --ink: ${LIGHT.ink}; --added: ${LIGHT.success.accent}; --changed: ${LIGHT.interactive.accent};
+  --affected: ${LIGHT.danger.accent}; --depends: ${LIGHT.interactive.accent};
 }
-:root[data-theme="dark"] { --bg: #0b1120; --panel: #111827; --ink: #e5e7eb; --muted: #94a3b8; --line: #1f2937; color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink);
-  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  font: var(--text-base)/1.45 var(--sans); font-feature-settings: "tnum"; }
+:focus-visible { outline: 2px solid var(--i-ink); outline-offset: 2px; }
 header { padding: 16px 20px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
-h1 { font-size: 18px; margin: 0 0 4px; }
-h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 8px; }
-.meta { color: var(--muted); font-size: 12px; }
+h1 { font-size: var(--text-xl); margin: 0 0 4px; }
+h2 { font: 500 var(--text-xs)/1.4 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
+.meta { color: var(--muted); font: var(--text-xs)/1.5 var(--mono); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.chip { border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 12px; background: var(--bg); }
+.chip { border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 2px 10px; font-size: var(--text-sm); background: var(--bg); }
 .chip b { font-weight: 600; }
-.chip.warn { border-color: var(--warn); }
+.chip.warn { border-color: var(--attention-line); background: var(--attention-surface); }
+.chip.warn::before { content: "\\25B2  "; color: var(--attention-ink); font-size: .8em; }
+.chip.danger { border-color: var(--danger-line); background: var(--danger-surface); }
+.chip.danger::before { content: "\\2715  "; color: var(--danger-ink); font-size: .8em; }
 main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: calc(100vh - 110px); }
 @media (max-width: 860px) { main { grid-template-columns: 1fr; } }
 .stage { padding: 12px 16px; min-width: 0; }
 .tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
-.tabs button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px;
-  padding: 4px 10px; font: inherit; font-size: 12px; cursor: pointer; }
-.tabs button[aria-selected="true"] { border-color: var(--accent); color: var(--accent); }
-.diagram { background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: auto; max-height: calc(100vh - 170px); }
+.tabs button, .toolbar button { border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink);
+  border-radius: var(--radius-sm); padding: 4px 10px; font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.tabs button:hover, .toolbar button:hover { background: var(--surface-hover); }
+.tabs button:active, .toolbar button:active { background: var(--surface-active); }
+.tabs button[aria-selected="true"] { border-color: var(--i-line); background: var(--i-surface); color: var(--i-ink); }
+.diagram { background: ${LIGHT.card}; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-1); overflow: auto; max-height: calc(100vh - 170px); }
 .diagram svg { display: block; max-width: none; height: auto; }
 .diagram.fit svg { max-width: 100%; height: auto; }
 .toolbar { display: flex; align-items: center; gap: 12px; margin: 8px 2px 0; flex-wrap: wrap; }
-.toolbar button { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px;
-  padding: 2px 8px; font: inherit; font-size: 12px; cursor: pointer; }
-.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: var(--text-sm); color: var(--muted); }
 .legend span::before { content: ""; display: inline-block; width: 12px; height: 8px; margin-right: 5px;
   border: 2px solid currentColor; border-radius: 3px; vertical-align: middle; }
 .legend .l-added { color: var(--added); } .legend .l-changed { color: var(--changed); }
 .legend .l-affected { color: var(--affected); } .legend .l-depends { color: var(--depends); }
 .legend .l-added::before, .legend .l-changed::before { border-style: dashed; }
-.diagram pre { margin: 0; padding: 12px; color: #0f172a; font-size: 12px; white-space: pre; }
-.hint { color: var(--muted); font-size: 12px; margin: 0; flex: 1 1 260px; }
+.diagram pre { margin: 0; padding: 12px; color: var(--ink); font: var(--text-sm)/1.5 var(--mono); white-space: pre; }
+.hint { color: var(--muted); font-size: var(--text-sm); margin: 0; flex: 1 1 260px; }
 aside { border-left: 1px solid var(--line); background: var(--panel); padding: 4px 16px 16px; overflow: auto; }
 @media (max-width: 860px) { aside { border-left: 0; border-top: 1px solid var(--line); } }
 ul.list { list-style: none; margin: 0; padding: 0; }
-ul.list li { padding: 3px 0; font-size: 12px; overflow-wrap: anywhere; }
-ul.list button { all: unset; cursor: pointer; color: var(--accent); }
+ul.list li { padding: 3px 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+ul.list button { all: unset; cursor: pointer; color: var(--i-ink); }
+ul.list button:focus-visible { outline: 2px solid var(--i-ink); outline-offset: 2px; }
 ul.list button:hover { text-decoration: underline; }
-.tag { display: inline-block; min-width: 58px; font-size: 11px; font-weight: 600; }
-.tag.added { color: var(--added); } .tag.removed { color: var(--removed); } .tag.changed { color: var(--changed); }
-.empty { color: var(--muted); font-size: 12px; }
-dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 12px; margin: 0; }
+.tag { display: inline-block; min-width: 58px; font-size: var(--text-xs); font-weight: 600; }
+.tag.added { color: var(--success-ink); } .tag.removed { color: var(--danger-ink); } .tag.changed { color: var(--info-ink); }
+.empty { color: var(--muted); font-size: var(--text-sm); }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: var(--text-sm); margin: 0; }
 dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
 .node { cursor: pointer; }
 .dw-added > path, .dw-added > polygon { stroke: var(--added) !important; stroke-width: 3 !important; stroke-dasharray: 6 3; }
 .dw-changed > path, .dw-changed > polygon { stroke: var(--changed) !important; stroke-width: 3 !important; stroke-dasharray: 6 3; }
-.dw-focus .node, .dw-focus .edge { opacity: .18; transition: opacity .15s; }
+.dw-focus .node, .dw-focus .edge { opacity: .18; transition: opacity var(--dur-fast) var(--ease); }
 .dw-focus .node.dw-on, .dw-focus .edge.dw-on { opacity: 1; }
 .dw-focus .node.dw-selected > path, .dw-focus .node.dw-selected > polygon { stroke: var(--ink) !important; stroke-width: 3.5 !important; }
 .dw-focus .node.dw-affected > path, .dw-focus .node.dw-affected > polygon { stroke: var(--affected) !important; stroke-width: 3 !important; }
@@ -297,7 +313,8 @@ function chips(snapshot: Snapshot): string {
   if (c) {
     const n =
       c.entities.added.length + c.entities.removed.length + c.entities.changed.length + c.edges.added.length + c.edges.removed.length
-    out.push(`<span class="chip${n ? ' warn' : ''}"><b>${n}</b> ${n === 1 ? 'change' : 'changes'} since the last deploy</span>`)
+    // A count, not a request: neutral, so the chips that do want attention stand out.
+    out.push(`<span class="chip"><b>${n}</b> ${n === 1 ? 'change' : 'changes'} since the last deploy</span>`)
   }
   const d = snapshot.drift
   if (d) {
@@ -313,7 +330,7 @@ function chips(snapshot: Snapshot): string {
   if (snapshot.health) {
     const counts = { healthy: 0, degraded: 0, down: 0 }
     for (const s of Object.values(snapshot.health)) counts[s]++
-    if (counts.down) out.push(`<span class="chip warn"><b>${counts.down}</b> down</span>`)
+    if (counts.down) out.push(`<span class="chip danger"><b>${counts.down}</b> down</span>`)
     if (counts.degraded) out.push(`<span class="chip warn"><b>${counts.degraded}</b> degraded</span>`)
   }
   return out.join('')

@@ -26,7 +26,7 @@ When adding a feature, decide which of those four it is. If it fits none, it pro
 
 Not preferences. Breaking either defeats the project's purpose:
 
-1. **No native dependencies, ever.** The whole install must work with npm alone — no compiled addons, no system packages, no post-install build step. This project exists because `mingrammer/diagrams` needs the Graphviz *binary* and that can't clear corporate software approval. Pure JS and WebAssembly are both fine and may be regular dependencies; a native binary may only ever be an *opportunistic upgrade* discovered by `probe()`, never something the tool needs. Runtime deps: `commander`, `yaml`, `zod`, `@hpcc-js/wasm-graphviz`.
+1. **No native dependencies, ever.** The whole install must work with npm alone — no compiled addons, no system packages, no post-install build step. This project exists because `mingrammer/diagrams` needs the Graphviz *binary* and that can't clear corporate software approval. Pure JS and WebAssembly are both fine and may be regular dependencies; a native binary may only ever be an *opportunistic upgrade* discovered by `probe()`, never something the tool needs. Runtime deps: `commander`, `yaml`, `zod`, `@hpcc-js/wasm-graphviz`, `@brignano/design` (plain CSS).
 2. **Read-only credentials only.** driftwood observes and reports. It never mutates infrastructure.
 
 ## Extension points
@@ -51,6 +51,8 @@ See `.claude/skills/add-renderer/SKILL.md`. Implement `Renderer` from `src/rende
 ### Icons and colour
 
 `src/render/icons.ts` owns what an entity *is* (`iconFor`) and what colour it gets (`familyFor`, `PALETTE`). Every renderer classifies through it — Mermaid maps the same keys onto shapes because it has no icon primitive. Never add a second regex table; a queue drawn as a queue in one engine and a cylinder in another means the pictures no longer describe the same system.
+
+Colour comes from the shared design system, [`@brignano/design`](https://github.com/brignano/design), through `src/design.ts`, which reads its stylesheets from the installed package. **Never write a hex in `src/`.** The viewer inlines the stylesheets and uses the tokens as CSS properties; diagrams cannot evaluate `var()`, so they take `LIGHT`, the light theme resolved to literals (every diagram is drawn on a white card). Families use the categorical palette (`--chart-1…6`) in its validated order; health and change marks use the state tokens (`--success`, `--attention`, `--danger`, and `--i` for an update), and are always worded as well as coloured. `test/design.test.ts` fails if a renderer emits a colour the design system does not declare.
 
 Icons are drawn in this repo, by category rather than by vendor: no asset pack to vendor, no trademark terms, and one glyph that serves RDS, Cloud SQL and an on-prem Postgres alike. Being vendor-neutral is what makes a second declarative provider cheap — CloudFormation type names (`AWS::ECS::Service`) and GCP kinds classify correctly with no new rules.
 
