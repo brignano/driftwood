@@ -473,7 +473,7 @@ export function formatPreviewComment(preview: PlanPreview, ctx: CommentContext =
   if (ctx.diagram) {
     out.push('```mermaid', ctx.diagram.trimEnd(), '```', '')
     const legend =
-      'Outlined violet: create · cyan: update · amber: replace · dashed red: destroy. Thick violet arrows are new relationships; dashed red ones go away.'
+      'Outlined green: create · blue: update · amber: replace · dashed red: destroy. Thick green arrows are new relationships; dashed red ones go away.'
     out.push(
       ctx.neighbours === false
         ? `${legend} Only the changed resources are drawn; with their neighbours the picture was too large to read.`

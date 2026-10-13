@@ -435,7 +435,7 @@ Every input except the state is optional, and each one adds a section:
 **The page a platform embeds.** Every snapshot includes `index.html`, a single file with everything inline: the diagrams, the snapshot, and a small script. It needs no server, CDN or sibling file, so it works opened from disk, served from a bucket, or framed by a build platform. It shows:
 
 - each view as a tab, with health colours from `--health`;
-- what this deploy added (violet, dashed) and changed (cyan, dashed), with removals listed beside the diagram;
+- what this deploy added (green, dashed) and changed (blue, dashed), with removals listed beside the diagram;
 - **blast radius**: click a component to highlight everything that depends on it, directly or through others, and everything it depends on.
 
 Blast radius follows the edges the providers recorded, so it is only as complete as they are. Terraform records references between resources, not runtime calls, so a database that services reach through a connection string shows nothing depending on it until a runtime provider such as Dynatrace adds those edges. Entity names reach the page as text, never as markup, because they come from someone's cloud account.
