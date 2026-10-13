@@ -28,10 +28,8 @@ describe('@brignano/design tokens', () => {
     expect(LIGHT.danger.tint).toBe(mix(LIGHT.danger.accent, 0.12, LIGHT.card))
   })
 
-  it('give families the categorical palette in its validated order', () => {
-    expect(PALETTE.edge).toEqual(LIGHT.chart[0])
-    expect(PALETTE.observability).toEqual(LIGHT.chart[5])
-    expect(PALETTE.other).toEqual(LIGHT.chartOther)
+  it('leave every family neutral, so colour is only ever state', () => {
+    for (const style of Object.values(PALETTE)) expect(style).toEqual({ accent: LIGHT.slate, tint: LIGHT.card })
   })
 })
 
@@ -46,7 +44,7 @@ describe('diagram colours', () => {
   it('use no colour the design system does not declare', () => {
     const declared = new Set(
       [LIGHT.card, LIGHT.ground, LIGHT.ink, LIGHT.inkSoft, LIGHT.slate, LIGHT.line, LIGHT.lineStrong].concat(
-        [LIGHT.interactive, LIGHT.success, LIGHT.attention, LIGHT.danger, LIGHT.chartOther, ...LIGHT.chart].flatMap(
+        [LIGHT.interactive, LIGHT.success, LIGHT.attention, LIGHT.danger].flatMap(
           (s) => [s.accent, s.tint],
         ),
       ),

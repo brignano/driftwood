@@ -1,4 +1,4 @@
-import { CHART_TOKENS_CSS, LIGHT, TOKENS_CSS } from './design.js'
+import { TOKENS_CSS } from './design.js'
 import type { Snapshot } from './snapshot.js'
 
 /**
@@ -39,82 +39,104 @@ function inlineSvg(svg: string): string {
 }
 
 /**
- * The page is styled by @brignano/design: its stylesheets are inlined ahead
- * of this one (the page must stay self-contained) and everything below uses
- * its tokens, so the viewer follows the system's light and dark themes and a
- * host's `data-theme`. The diagram card is the exception: the SVGs inside it
- * were drawn in light-theme colours, so it pins the light values of every
- * colour an outline or label on it uses, whatever the page theme. (Pinned
- * by value: a custom property holding `var()` resolves where it is declared.)
+ * The page is styled by @brignano/design: its stylesheet is inlined ahead of
+ * this one (the page must stay self-contained) and everything below uses its
+ * tokens, so the viewer follows the system's light and dark themes and a
+ * host's `data-theme`. That includes the diagrams: Graphviz drew them in the
+ * light theme's literal colours, so the rules under "Diagram" repaint every
+ * part of the SVG from tokens, and a dark page gets a dark diagram.
+ *
+ * Layout follows DESIGN.md §9: the verdict first, then the pills that back it
+ * up, then the picture, which is neutral except where something changed or is
+ * unhealthy.
  */
 const STYLE = `
 ${TOKENS_CSS}
-${CHART_TOKENS_CSS}
-:root {
-  --panel: var(--card); --muted: var(--ink-soft); --accent: var(--i-ink);
-  --added: var(--success); --changed: var(--info); --removed: var(--danger);
-  --affected: var(--danger); --depends: var(--i); --warn: var(--attention);
-}
-.diagram {
-  --ink: ${LIGHT.ink}; --added: ${LIGHT.success.accent}; --changed: ${LIGHT.interactive.accent};
-  --affected: ${LIGHT.danger.accent}; --depends: ${LIGHT.interactive.accent};
-}
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink);
   font: var(--text-base)/1.45 var(--sans); font-feature-settings: "tnum"; }
 :focus-visible { outline: 2px solid var(--i-ink); outline-offset: 2px; }
-header { padding: 16px 20px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
-h1 { font-size: var(--text-xl); margin: 0 0 4px; }
-h2 { font: 500 var(--text-xs)/1.4 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 18px 0 8px; }
-.meta { color: var(--muted); font: var(--text-xs)/1.5 var(--mono); }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.chip { border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: 2px 10px; font-size: var(--text-sm); background: var(--bg); }
-.chip b { font-weight: 600; }
-.chip.warn { border-color: var(--attention-line); background: var(--attention-surface); }
-.chip.warn::before { content: "\\25B2  "; color: var(--attention-ink); font-size: .8em; }
-.chip.danger { border-color: var(--danger-line); background: var(--danger-surface); }
-.chip.danger::before { content: "\\2715  "; color: var(--danger-ink); font-size: .8em; }
-main { display: grid; grid-template-columns: minmax(0, 1fr) 320px; min-height: calc(100vh - 110px); }
-@media (max-width: 860px) { main { grid-template-columns: 1fr; } }
-.stage { padding: 12px 16px; min-width: 0; }
-.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 10px; }
-.tabs button, .toolbar button { border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink);
-  border-radius: var(--radius-sm); padding: 4px 10px; font: inherit; font-size: var(--text-sm); cursor: pointer; }
-.tabs button:hover, .toolbar button:hover { background: var(--surface-hover); }
-.tabs button:active, .toolbar button:active { background: var(--surface-active); }
-.tabs button[aria-selected="true"] { border-color: var(--i-line); background: var(--i-surface); color: var(--i-ink); }
-.diagram { background: ${LIGHT.card}; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-1); overflow: auto; max-height: calc(100vh - 170px); }
-.diagram svg { display: block; max-width: none; height: auto; }
+.eyebrow { font: 500 var(--text-xs)/1.4 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); margin: 0; }
+header { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s4) var(--s6);
+  padding: var(--s5) var(--s5) var(--s4); border-bottom: 1px solid var(--line); background: var(--card); }
+header .lead { display: flex; flex-direction: column; gap: 6px; flex: 1 1 520px; min-width: 0; }
+h1 { font-size: var(--text-xl); font-weight: 600; letter-spacing: -.01em; margin: 0; }
+h2 { font: 500 var(--text-xs)/1.4 var(--mono); text-transform: uppercase; letter-spacing: .06em; color: var(--ink-soft); margin: var(--s5) 0 var(--s2); }
+.meta { color: var(--ink-soft); font: var(--text-xs)/1.5 var(--mono); margin: 0; overflow-wrap: anywhere; }
+.pills { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.pill { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  padding: 2px 10px; font-size: var(--text-sm); background: var(--card); }
+.pill b { font-weight: 600; }
+.pill.warn { border-color: var(--attention-line); background: var(--attention-surface); }
+.pill.warn::before { content: "\\25B2"; color: var(--attention-ink); font-size: .75em; }
+.pill.danger { border-color: var(--danger-line); background: var(--danger-surface); }
+.pill.danger::before { content: "\\2715"; color: var(--danger-ink); font-size: .8em; }
+main { display: flex; flex-wrap: wrap; min-height: calc(100vh - 120px); }
+nav { flex: 1 1 200px; max-width: 240px; padding: var(--s4) var(--s3); border-right: 1px solid var(--line); }
+nav .eyebrow { padding: 0 10px var(--s2); }
+.views { display: flex; flex-direction: column; gap: 2px; }
+.views button { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; align-items: center; gap: var(--s2);
+  width: 100%; min-height: 36px; padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--text-sm); color: var(--ink); cursor: pointer; }
+.views button:hover { background: var(--surface-hover); }
+.views button:active { background: var(--surface-active); }
+.views button[aria-selected="true"] { background: var(--i-surface); color: var(--i-ink); font-weight: 500; }
+.views button:focus-visible { outline: 2px solid var(--i-ink); outline-offset: 2px; }
+.views .count { font: var(--text-xs) var(--mono); color: var(--ink-soft); }
+.views .dot { display: inline-block; width: 6px; height: 6px; border-radius: 3px; background: var(--attention); margin-right: 6px; vertical-align: middle; }
+.stage { flex: 999 1 560px; min-width: 0; padding: var(--s4) var(--s5); display: flex; flex-direction: column; gap: var(--s3); }
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+.toolbar button { border: 1px solid var(--line-strong); background: var(--card); color: var(--ink); border-radius: var(--radius-sm);
+  padding: 4px 10px; font: inherit; font-size: var(--text-sm); cursor: pointer; }
+.toolbar button:hover { background: var(--surface-hover); }
+.legend { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; font-size: var(--text-sm); color: var(--ink-soft); }
+.tag { display: inline-block; font: 500 10px/1.5 var(--mono); padding: 0 6px; border-radius: 4px; border: 1px solid var(--line-strong);
+  color: var(--ink-soft); background: var(--card); white-space: nowrap; }
+.tag.added { color: var(--success-ink); border-color: var(--success); }
+.tag.changed { color: var(--i-ink); border-color: var(--i); }
+.tag.removed { border-style: dashed; }
+.tag.down { color: var(--danger-ink); border-color: var(--danger); }
+.tag.degraded { color: var(--attention-ink); border-color: var(--attention); }
+.diagram { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); overflow: auto; max-height: calc(100vh - 200px);
+  background-image: radial-gradient(var(--line) 1px, transparent 1px); background-size: 16px 16px; }
+.diagram svg { display: block; max-width: none; height: auto; margin: 0 auto; }
 .diagram.fit svg { max-width: 100%; height: auto; }
-.toolbar { display: flex; align-items: center; gap: 12px; margin: 8px 2px 0; flex-wrap: wrap; }
-.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: var(--text-sm); color: var(--muted); }
-.legend span::before { content: ""; display: inline-block; width: 12px; height: 8px; margin-right: 5px;
-  border: 2px solid currentColor; border-radius: 3px; vertical-align: middle; }
-.legend .l-added { color: var(--added); } .legend .l-changed { color: var(--changed); }
-.legend .l-affected { color: var(--affected); } .legend .l-depends { color: var(--depends); }
-.legend .l-added::before, .legend .l-changed::before { border-style: dashed; }
 .diagram pre { margin: 0; padding: 12px; color: var(--ink); font: var(--text-sm)/1.5 var(--mono); white-space: pre; }
-.hint { color: var(--muted); font-size: var(--text-sm); margin: 0; flex: 1 1 260px; }
-aside { border-left: 1px solid var(--line); background: var(--panel); padding: 4px 16px 16px; overflow: auto; }
-@media (max-width: 860px) { aside { border-left: 0; border-top: 1px solid var(--line); } }
+.hint { color: var(--ink-soft); font-size: var(--text-sm); margin: 0; }
+aside { flex: 1 1 300px; max-width: 380px; border-left: 1px solid var(--line); background: var(--card); padding: var(--s1) var(--s5) var(--s5); overflow: auto; }
+@media (max-width: 860px) { nav { max-width: none; border-right: 0; border-bottom: 1px solid var(--line); } aside { max-width: none; border-left: 0; border-top: 1px solid var(--line); } }
+aside .name { font-size: var(--text-lg); font-weight: 600; margin: 0; overflow-wrap: anywhere; }
 ul.list { list-style: none; margin: 0; padding: 0; }
-ul.list li { padding: 3px 0; font-size: var(--text-sm); overflow-wrap: anywhere; }
+ul.list li { display: flex; gap: var(--s2); align-items: baseline; padding: 4px 0; font-size: var(--text-sm); overflow-wrap: anywhere; border-bottom: 1px solid var(--line); }
+ul.list li:last-child { border-bottom: 0; }
 ul.list button { all: unset; cursor: pointer; color: var(--i-ink); }
-ul.list button:focus-visible { outline: 2px solid var(--i-ink); outline-offset: 2px; }
 ul.list button:hover { text-decoration: underline; }
-.tag { display: inline-block; min-width: 58px; font-size: var(--text-xs); font-weight: 600; }
-.tag.added { color: var(--success-ink); } .tag.removed { color: var(--danger-ink); } .tag.changed { color: var(--info-ink); }
-.empty { color: var(--muted); font-size: var(--text-sm); }
-dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: var(--text-sm); margin: 0; }
-dt { color: var(--muted); } dd { margin: 0; overflow-wrap: anywhere; }
-.node { cursor: pointer; }
-.dw-added > path, .dw-added > polygon { stroke: var(--added) !important; stroke-width: 3 !important; stroke-dasharray: 6 3; }
-.dw-changed > path, .dw-changed > polygon { stroke: var(--changed) !important; stroke-width: 3 !important; stroke-dasharray: 6 3; }
-.dw-focus .node, .dw-focus .edge { opacity: .18; transition: opacity var(--dur-fast) var(--ease); }
+ul.list button:focus-visible { outline: 2px solid var(--i-ink); outline-offset: 2px; }
+.empty { color: var(--ink-soft); font-size: var(--text-sm); margin: 0; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: var(--text-sm); margin: var(--s2) 0 0; }
+dt { color: var(--ink-soft); } dd { margin: 0; overflow-wrap: anywhere; }
+
+/* Diagram: repaint Graphviz's light-theme literals from tokens. */
+.diagram .graph > polygon { fill: transparent; stroke: none; }
+.diagram .cluster > path, .diagram .cluster > polygon { fill: var(--line-soft); stroke: var(--line); }
+.diagram .cluster > text { fill: var(--ink-soft); }
+.diagram .node { cursor: pointer; transition: opacity var(--dur-fast) var(--ease); }
+.diagram .node > path, .diagram .node > polygon { fill: var(--card); stroke: var(--line-strong); stroke-width: 1.2; }
+.diagram .node > text { fill: var(--ink); }
+.diagram .node > text ~ text { fill: var(--ink-soft); }
+.diagram .node .driftwood-icon { stroke: var(--ink-soft); color: var(--ink-soft); }
+.diagram .edge { transition: opacity var(--dur-fast) var(--ease); }
+.diagram .edge > path { stroke: var(--slate); }
+.diagram .edge > polygon { fill: var(--slate); stroke: var(--slate); }
+.diagram .edge > text { fill: var(--ink-soft); }
+.diagram .dw-degraded > path, .diagram .dw-degraded > polygon { fill: var(--attention-surface); stroke: var(--attention); stroke-width: 2; }
+.diagram .dw-down > path, .diagram .dw-down > polygon { fill: var(--danger-surface); stroke: var(--danger); stroke-width: 2; }
+.diagram .dw-added > path, .diagram .dw-added > polygon { stroke: var(--success); stroke-width: 2.5; }
+.diagram .dw-changed > path, .diagram .dw-changed > polygon { stroke: var(--i); stroke-width: 2.5; }
+.dw-focus .node, .dw-focus .edge { opacity: .3; }
 .dw-focus .node.dw-on, .dw-focus .edge.dw-on { opacity: 1; }
-.dw-focus .node.dw-selected > path, .dw-focus .node.dw-selected > polygon { stroke: var(--ink) !important; stroke-width: 3.5 !important; }
-.dw-focus .node.dw-affected > path, .dw-focus .node.dw-affected > polygon { stroke: var(--affected) !important; stroke-width: 3 !important; }
-.dw-focus .node.dw-depends > path, .dw-focus .node.dw-depends > polygon { stroke: var(--depends) !important; stroke-width: 3 !important; }
+.dw-focus .edge.dw-on > path { stroke: var(--ink); stroke-width: 1.6; }
+.dw-focus .edge.dw-on > polygon { fill: var(--ink); stroke: var(--ink); }
+.diagram .node.dw-selected > path, .diagram .node.dw-selected > polygon { stroke: var(--i-ink); stroke-width: 3.5; }
 `
 
 const SCRIPT = `
@@ -173,7 +195,7 @@ const SCRIPT = `
 
   function show(index) {
     var d = data.diagrams[index];
-    document.querySelectorAll('.tabs button').forEach(function (b, i) {
+    document.querySelectorAll('.views button').forEach(function (b, i) {
       b.setAttribute('aria-selected', String(i === index));
     });
     stage.innerHTML = '';
@@ -183,6 +205,8 @@ const SCRIPT = `
     current.forEach(function (g, id) {
       if (added.has(id)) g.classList.add('dw-added');
       else if (changed.has(id)) g.classList.add('dw-changed');
+      var h = snap.health && snap.health[id];
+      if (h === 'down' || h === 'degraded') g.classList.add('dw-' + h);
       g.addEventListener('click', function (ev) { ev.stopPropagation(); select(id); });
     });
     var svg = stage.querySelector('svg');
@@ -227,7 +251,7 @@ const SCRIPT = `
         if (parts.length === 2 && lit.has(parts[0]) && lit.has(parts[1])) g.classList.add('dw-on');
       });
     }
-    panel.appendChild(el('h2', e && e.name ? e.name : id));
+    panel.appendChild(el('p', e && e.name ? e.name : id, 'name'));
     var dl = el('dl');
     var row = function (k, v) { if (v) { dl.appendChild(el('dt', k)); dl.appendChild(el('dd', v)); } };
     row('id', id);
@@ -263,12 +287,26 @@ const SCRIPT = `
     zoom.textContent = fit ? 'Actual size' : 'Fit to width';
   });
 
-  var tabs = document.getElementById('tabs');
+  // One entry per view, with how much it holds and a dot when this deploy
+  // touched something in it, so a reader knows which view to open first.
+  var views = document.getElementById('views');
   data.diagrams.forEach(function (d, i) {
-    var b = el('button', d.title);
+    var ids = Array.from(nodesIn(document.getElementById('diagram-' + i).content).keys());
+    var touched = ids.some(function (id) { return added.has(id) || changed.has(id); });
+    var b = el('button');
     b.setAttribute('role', 'tab');
+    var name = el('span');
+    if (touched) {
+      var dot = el('span', null, 'dot');
+      dot.setAttribute('aria-hidden', 'true');
+      name.appendChild(dot);
+    }
+    name.appendChild(document.createTextNode(d.title));
+    b.appendChild(name);
+    if (ids.length) b.appendChild(el('span', String(ids.length), 'count'));
+    if (touched) b.setAttribute('aria-label', d.title + ', changed by this deploy');
     b.addEventListener('click', function () { show(i); });
-    tabs.appendChild(b);
+    views.appendChild(b);
   });
 
   var list = document.getElementById('changes');
@@ -279,7 +317,7 @@ const SCRIPT = `
     var item = function (tag, id, text, clickable) {
       any = true;
       var li = el('li');
-      li.appendChild(el('span', tag, 'tag ' + tag));
+      li.appendChild(el('span', { added: '+ added', changed: '~ changed', removed: '\u2212 removed' }[tag], 'tag ' + tag));
       if (clickable) {
         var b = el('button', text);
         b.addEventListener('click', function () { select(id); });
@@ -304,35 +342,66 @@ const SCRIPT = `
 })();
 `
 
-function chips(snapshot: Snapshot): string {
-  const out: string[] = []
-  const model = snapshot.observation.model
-  out.push(`<span class="chip"><b>${model.entities.length}</b> entities</span>`)
-  out.push(`<span class="chip"><b>${model.edges.length}</b> relationships</span>`)
+function healthCounts(snapshot: Snapshot): { healthy: number; degraded: number; down: number } {
+  const counts = { healthy: 0, degraded: 0, down: 0 }
+  for (const s of Object.values(snapshot.health ?? {})) counts[s]++
+  return counts
+}
+
+function changeCount(snapshot: Snapshot): number | undefined {
   const c = snapshot.changes
-  if (c) {
-    const n =
-      c.entities.added.length + c.entities.removed.length + c.entities.changed.length + c.edges.added.length + c.edges.removed.length
-    // A count, not a request: neutral, so the chips that do want attention stand out.
-    out.push(`<span class="chip"><b>${n}</b> ${n === 1 ? 'change' : 'changes'} since the last deploy</span>`)
+  if (!c) return undefined
+  return c.entities.added.length + c.entities.removed.length + c.entities.changed.length + c.edges.added.length + c.edges.removed.length
+}
+
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
+
+/**
+ * One sentence saying what this deploy left behind and what, if anything,
+ * wants the reader. It only restates facts the pills below it carry.
+ */
+export function verdict(snapshot: Snapshot): string {
+  const { environment, build } = snapshot.subject
+  const subject = `${build ? `Build ${build}` : 'This deploy'} on ${environment}`
+  const { down, degraded } = healthCounts(snapshot)
+  const problems: string[] = []
+  if (down) problems.push(`${plural(down, 'resource is', 'resources are')} down`)
+  if (degraded) problems.push(`${plural(degraded, 'resource is', 'resources are')} degraded`)
+  if (snapshot.drift?.hasDrift) problems.push('it differs from the committed design')
+  if (problems.length) {
+    const last = problems.pop()!
+    return `${subject}: ${problems.length ? `${problems.join(', ')} and ${last}` : last}.`
   }
+  const fine: string[] = []
+  if (snapshot.health) fine.push('is healthy')
+  if (snapshot.drift) fine.push('matches the committed design')
+  if (fine.length) return `${subject} ${fine.join(' and ')}.`
+  const n = changeCount(snapshot)
+  return n === undefined ? `${subject}.` : `${subject}: ${plural(n, 'change', 'changes')} since the last deploy.`
+}
+
+function pills(snapshot: Snapshot): string {
+  const out: string[] = []
+  const { down, degraded } = healthCounts(snapshot)
+  if (down) out.push(`<span class="pill danger"><b>${down}</b> down</span>`)
+  if (degraded) out.push(`<span class="pill warn"><b>${degraded}</b> degraded</span>`)
   const d = snapshot.drift
   if (d) {
     out.push(
       d.hasDrift
-        ? '<span class="chip warn">differs from the committed design</span>'
-        : '<span class="chip">matches the committed design</span>',
+        ? '<span class="pill warn">differs from the committed design</span>'
+        : '<span class="pill">matches the committed design</span>',
     )
-    if (d.entities.unverifiable.length) {
-      out.push(`<span class="chip"><b>${d.entities.unverifiable.length}</b> in a blind spot, not checked</span>`)
-    }
   }
-  if (snapshot.health) {
-    const counts = { healthy: 0, degraded: 0, down: 0 }
-    for (const s of Object.values(snapshot.health)) counts[s]++
-    if (counts.down) out.push(`<span class="chip danger"><b>${counts.down}</b> down</span>`)
-    if (counts.degraded) out.push(`<span class="chip warn"><b>${counts.degraded}</b> degraded</span>`)
+  const n = changeCount(snapshot)
+  // A count, not a request: neutral, so the pills that do want attention stand out.
+  if (n !== undefined) out.push(`<span class="pill"><b>${n}</b> ${n === 1 ? 'change' : 'changes'} since the last deploy</span>`)
+  if (d?.entities.unverifiable.length) {
+    out.push(`<span class="pill"><b>${d.entities.unverifiable.length}</b> in a blind spot, not checked</span>`)
   }
+  const model = snapshot.observation.model
+  out.push(`<span class="pill"><b>${model.entities.length}</b> entities</span>`)
+  out.push(`<span class="pill"><b>${model.edges.length}</b> relationships</span>`)
   return out.join('')
 }
 
@@ -370,22 +439,28 @@ export function renderViewer(snapshot: Snapshot, files: Record<string, string>):
 </head>
 <body>
 <header>
-  <h1>${escapeHtml(title)}</h1>
-  <div class="meta">${escapeHtml(meta)}</div>
-  <div class="chips">${chips(snapshot)}</div>
+  <div class="lead">
+    <p class="eyebrow">${escapeHtml(title)}</p>
+    <h1>${escapeHtml(verdict(snapshot))}</h1>
+    <p class="meta">${escapeHtml(meta)}</p>
+  </div>
+  <div class="pills">${pills(snapshot)}</div>
 </header>
 <main>
+  <nav aria-label="Views">
+    <h2 class="eyebrow">Views</h2>
+    <div class="views" id="views" role="tablist"></div>
+  </nav>
   <section class="stage">
-    <div class="tabs" id="tabs" role="tablist"></div>
-    <div class="diagram fit" id="diagram"></div>
     <div class="toolbar">
+      <div class="legend">
+        <span class="tag added">+ added</span><span class="tag changed">~ changed</span>
+        <span class="tag down">\u2715 down</span><span class="tag degraded">\u25B2 degraded</span>
+        <p class="hint" id="hint"></p>
+      </div>
       <button type="button" id="zoom">Actual size</button>
-      <p class="hint" id="hint"></p>
     </div>
-    <div class="legend">
-      <span class="l-added">added by this deploy</span><span class="l-changed">changed by this deploy</span>
-      <span class="l-affected">affected if the selection fails</span><span class="l-depends">what the selection depends on</span>
-    </div>
+    <div class="diagram fit" id="diagram"></div>
   </section>
   <aside>
     <h2>Selected</h2>

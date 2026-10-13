@@ -27,7 +27,7 @@ import { ICON_SIZE, MARKER_PREFIX, iconFor, kindLabel, marker, styleFor } from '
 // Every colour comes from @brignano/design; see `src/design.ts`.
 const INK = LIGHT.ink
 const MUTED = LIGHT.inkSoft
-const CLUSTER_LINE = LIGHT.lineStrong
+const CLUSTER_LINE = LIGHT.line
 const CLUSTER_FILL = LIGHT.ground
 const EDGE_COLOR = LIGHT.slate
 
@@ -36,8 +36,10 @@ const EDGE_COLOR = LIGHT.slate
  * The design system's state hues, and the state is also written into the
  * node, because colour must never be the only signal.
  */
-const HEALTH_COLORS: Record<string, Swatch> = {
-  healthy: LIGHT.success,
+const HEALTH_COLORS: Record<string, Swatch | undefined> = {
+  // Healthy is the expected state, so it is worded but not coloured: nothing
+  // is asking for attention.
+  healthy: undefined,
   degraded: LIGHT.attention,
   down: LIGHT.danger,
 }
@@ -95,7 +97,7 @@ export function renderDot(model: Model, ctx: RenderContext = {}): string {
   const nodeLine = (e: Entity, indent: string): string => {
     const health = ctx.health?.[e.id]
     const style = (health ? HEALTH_COLORS[health] : undefined) ?? styleFor(e.kind)
-    const penwidth = health ? 2.2 : 1.2
+    const penwidth = health && HEALTH_COLORS[health] ? 2.2 : 1.2
     const rows: string[] = []
     if (withIcons) {
       // A fixed-size cell so Graphviz reserves exactly the room the icon will

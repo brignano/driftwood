@@ -81,9 +81,9 @@ const MARK_STYLES: Record<ChangeMark, string> = {
   destroy: `stroke:${MARK_COLORS.destroy.accent},stroke-width:3px,stroke-dasharray:6 4`,
 }
 
-/** Health fills, the design system's state washes, worded in the label too. */
+/** Health fills, the design system's state washes, worded in the label too. Healthy is not coloured. */
 const HEALTH_COLORS: Record<string, Swatch> = {
-  healthy: LIGHT.success,
+  healthy: { accent: LIGHT.slate, tint: LIGHT.card },
   degraded: LIGHT.attention,
   down: LIGHT.danger,
 }

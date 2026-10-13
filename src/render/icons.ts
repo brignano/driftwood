@@ -37,20 +37,23 @@ export type Family = 'edge' | 'compute' | 'data' | 'messaging' | 'security' | 'o
 export type FamilyStyle = Swatch
 
 /**
- * Families are categories, so they take the design system's categorical
- * palette (`--chart-1…6`) in its validated order, which is what keeps
- * neighbouring slots apart under colour-vision deficiency. `other` is not a
- * category, so it gets the neutral `--chart-other`. Every node also carries
- * its name, kind and icon, so colour is never the only signal.
+ * Every family draws the same neutral card. Following the design system's
+ * diagram rule (@brignano/design, DESIGN.md §9), a node's kind is carried by
+ * its icon and its label, and colour is kept for state (health, and what a
+ * deploy or plan changed), so the one thing that is down is the one thing
+ * that stands out. Families stay in the model of this module because they
+ * still decide shapes and give renderers a hook, not because they get a hue.
  */
+const NEUTRAL: FamilyStyle = { accent: LIGHT.slate, tint: LIGHT.card }
+
 export const PALETTE: Record<Family, FamilyStyle> = {
-  edge: LIGHT.chart[0]!,
-  compute: LIGHT.chart[1]!,
-  data: LIGHT.chart[2]!,
-  messaging: LIGHT.chart[3]!,
-  security: LIGHT.chart[4]!,
-  observability: LIGHT.chart[5]!,
-  other: LIGHT.chartOther,
+  edge: NEUTRAL,
+  compute: NEUTRAL,
+  data: NEUTRAL,
+  messaging: NEUTRAL,
+  security: NEUTRAL,
+  observability: NEUTRAL,
+  other: NEUTRAL,
 }
 
 export type IconKey =

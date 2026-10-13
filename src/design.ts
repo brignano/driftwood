@@ -28,8 +28,6 @@ function stylesheet(file: string): string {
 
 /** `tokens.css`, verbatim, for inlining into a page. */
 export const TOKENS_CSS = stylesheet('tokens.css')
-/** `tokens.chart.css`, verbatim. */
-export const CHART_TOKENS_CSS = stylesheet('tokens.chart.css')
 
 /**
  * The declarations in a stylesheet's first `:root { … }` block, which in both
@@ -48,7 +46,7 @@ function lightDeclarations(css: string): Map<string, string> {
   return out
 }
 
-const declared = new Map([...lightDeclarations(TOKENS_CSS), ...lightDeclarations(CHART_TOKENS_CSS)])
+const declared = lightDeclarations(TOKENS_CSS)
 
 /** A light-theme token as a literal colour, following `var()` aliases. */
 function token(name: string, seen: string[] = []): string {
@@ -101,7 +99,4 @@ export const LIGHT = {
   success: swatch('--success'),
   attention: swatch('--attention'),
   danger: swatch('--danger'),
-  /** The categorical palette, slots 1–8 in their validated order. */
-  chart: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => swatch(`--chart-${n}`)),
-  chartOther: swatch('--chart-other'),
 } as const

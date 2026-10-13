@@ -74,7 +74,7 @@ describe('the snapshot viewer', () => {
 
   it('escapes the heading too', async () => {
     const { files } = await snap(first, { subject: { app: '<b>x</b>', environment: 'prod' } })
-    expect(files[VIEWER_FILE]).toContain('<h1>&lt;b&gt;x&lt;/b&gt; · prod</h1>')
+    expect(files[VIEWER_FILE]).toContain('<p class="eyebrow">&lt;b&gt;x&lt;/b&gt; · prod</p>')
   })
 
   it('summarises changes, drift and health in the header', async () => {
@@ -90,6 +90,13 @@ describe('the snapshot viewer', () => {
     expect(html).toContain('differs from the committed design')
     expect(html).toContain('<b>1</b> down')
     expect(html).toContain('<b>1</b> degraded')
+    // The verdict leads, and says only what the pills back up.
+    expect(html).toMatch(/: 1 resource is down, 1 resource is degraded and it differs from the committed design\.<\/h1>/)
+  })
+
+  it('says so plainly when nothing wants attention', async () => {
+    const { files } = await snap(first, { declared: first, health: { 'aws_lb.api': 'healthy' } })
+    expect(files[VIEWER_FILE]).toMatch(/ is healthy and matches the committed design\.<\/h1>/)
   })
 
   it('reaches the page only through textContent', async () => {

@@ -11,27 +11,27 @@
 <polygon fill="#ffffff" stroke="none" points="-21.6,21.6 -21.6,-545.6 334.59,-545.6 334.59,21.6 -21.6,21.6"/>
 <g id="clust1" class="cluster">
 <title>cluster_0</title>
-<path fill="#fafafa" stroke="#cbcbce" d="M20,-221C20,-221 281.36,-221 281.36,-221 287.36,-221 293.36,-227 293.36,-233 293.36,-233 293.36,-504 293.36,-504 293.36,-510 287.36,-516 281.36,-516 281.36,-516 20,-516 20,-516 14,-516 8,-510 8,-504 8,-504 8,-233 8,-233 8,-227 14,-221 20,-221"/>
+<path fill="#fafafa" stroke="#ececea" d="M20,-221C20,-221 281.36,-221 281.36,-221 287.36,-221 293.36,-227 293.36,-233 293.36,-233 293.36,-504 293.36,-504 293.36,-510 287.36,-516 281.36,-516 281.36,-516 20,-516 20,-516 14,-516 8,-510 8,-504 8,-504 8,-233 8,-233 8,-227 14,-221 20,-221"/>
 <text xml:space="preserve" text-anchor="start" x="16" y="-501" font-family="Helvetica,sans-Serif" font-size="11.00" fill="#52525b">ecs</text>
 </g>
 <g id="clust2" class="cluster">
 <title>cluster_1</title>
-<path fill="#fafafa" stroke="#cbcbce" d="M34.29,-8C34.29,-8 292.99,-8 292.99,-8 298.99,-8 304.99,-14 304.99,-20 304.99,-20 304.99,-201 304.99,-201 304.99,-207 298.99,-213 292.99,-213 292.99,-213 34.29,-213 34.29,-213 28.29,-213 22.29,-207 22.29,-201 22.29,-201 22.29,-20 22.29,-20 22.29,-14 28.29,-8 34.29,-8"/>
+<path fill="#fafafa" stroke="#ececea" d="M34.29,-8C34.29,-8 292.99,-8 292.99,-8 298.99,-8 304.99,-14 304.99,-20 304.99,-20 304.99,-201 304.99,-201 304.99,-207 298.99,-213 292.99,-213 292.99,-213 34.29,-213 34.29,-213 28.29,-213 22.29,-207 22.29,-201 22.29,-201 22.29,-20 22.29,-20 22.29,-14 28.29,-8 34.29,-8"/>
 <text xml:space="preserve" text-anchor="start" x="30.29" y="-198" font-family="Helvetica,sans-Serif" font-size="11.00" fill="#52525b">lb</text>
 </g>
 <!-- aws_ecs_cluster.main -->
 <g id="node1" class="node">
 <title>aws_ecs_cluster.main</title>
-<path fill="#fdede7" stroke="#eb6834" stroke-width="1.2" d="M253.57,-390.72C253.57,-390.72 207.79,-390.72 207.79,-390.72 201.79,-390.72 195.79,-384.72 195.79,-378.72 195.79,-378.72 195.79,-337.28 195.79,-337.28 195.79,-331.28 201.79,-325.28 207.79,-325.28 207.79,-325.28 253.57,-325.28 253.57,-325.28 259.57,-325.28 265.57,-331.28 265.57,-337.28 265.57,-337.28 265.57,-378.72 265.57,-378.72 265.57,-384.72 259.57,-390.72 253.57,-390.72"/>
-<g class="driftwood-icon" transform="translate(218.68 -383) scale(1)" fill="none" stroke="#eb6834" color="#eb6834" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 20.6 7v10L12 21.4 3.4 17V7Z"/><circle cx="12" cy="12" r="3.2"/><path d="M12 8.8V4.6M14.8 13.8l3.6 2.1M9.2 13.8l-3.6 2.1"/></g>
+<path fill="#ffffff" stroke="#8a8a8f" stroke-width="1.2" d="M253.57,-390.72C253.57,-390.72 207.79,-390.72 207.79,-390.72 201.79,-390.72 195.79,-384.72 195.79,-378.72 195.79,-378.72 195.79,-337.28 195.79,-337.28 195.79,-331.28 201.79,-325.28 207.79,-325.28 207.79,-325.28 253.57,-325.28 253.57,-325.28 259.57,-325.28 265.57,-331.28 265.57,-337.28 265.57,-337.28 265.57,-378.72 265.57,-378.72 265.57,-384.72 259.57,-390.72 253.57,-390.72"/>
+<g class="driftwood-icon" transform="translate(218.68 -383) scale(1)" fill="none" stroke="#8a8a8f" color="#8a8a8f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 20.6 7v10L12 21.4 3.4 17V7Z"/><circle cx="12" cy="12" r="3.2"/><path d="M12 8.8V4.6M14.8 13.8l3.6 2.1M9.2 13.8l-3.6 2.1"/></g>
 <text xml:space="preserve" text-anchor="start" x="203.49" y="-346.5" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="11.00" fill="#111111">shop&#45;prod</text>
 <text xml:space="preserve" text-anchor="start" x="201.11" y="-332.2" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#52525b">aws_ecs_cluster</text>
 </g>
 <!-- aws_ecs_service.orders_api -->
 <g id="node2" class="node">
 <title>aws_ecs_service.orders_api</title>
-<path fill="#fdede7" stroke="#eb6834" stroke-width="1.2" d="M104.37,-300.72C104.37,-300.72 34,-300.72 34,-300.72 28,-300.72 22,-294.72 22,-288.72 22,-288.72 22,-247.28 22,-247.28 22,-241.28 28,-235.28 34,-235.28 34,-235.28 104.37,-235.28 104.37,-235.28 110.37,-235.28 116.37,-241.28 116.37,-247.28 116.37,-247.28 116.37,-288.72 116.37,-288.72 116.37,-294.72 110.37,-300.72 104.37,-300.72"/>
-<g class="driftwood-icon" transform="translate(57.19 -293) scale(1)" fill="none" stroke="#eb6834" color="#eb6834" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 20.6 7v10L12 21.4 3.4 17V7Z"/><path d="M8.4 12h7.2M12 8.4v7.2"/></g>
+<path fill="#ffffff" stroke="#8a8a8f" stroke-width="1.2" d="M104.37,-300.72C104.37,-300.72 34,-300.72 34,-300.72 28,-300.72 22,-294.72 22,-288.72 22,-288.72 22,-247.28 22,-247.28 22,-241.28 28,-235.28 34,-235.28 34,-235.28 104.37,-235.28 104.37,-235.28 110.37,-235.28 116.37,-241.28 116.37,-247.28 116.37,-247.28 116.37,-288.72 116.37,-288.72 116.37,-294.72 110.37,-300.72 104.37,-300.72"/>
+<g class="driftwood-icon" transform="translate(57.19 -293) scale(1)" fill="none" stroke="#8a8a8f" color="#8a8a8f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 20.6 7v10L12 21.4 3.4 17V7Z"/><path d="M8.4 12h7.2M12 8.4v7.2"/></g>
 <text xml:space="preserve" text-anchor="start" x="27.32" y="-256.5" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="11.00" fill="#111111">shop&#45;orders&#45;api</text>
 <text xml:space="preserve" text-anchor="start" x="38.73" y="-242.2" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#52525b">aws_ecs_service</text>
 </g>
@@ -44,8 +44,8 @@
 <!-- aws_ecs_task_definition.orders_api -->
 <g id="node4" class="node">
 <title>aws_ecs_task_definition.orders_api</title>
-<path fill="#fdede7" stroke="#eb6834" stroke-width="1.2" d="M267.36,-300.72C267.36,-300.72 194,-300.72 194,-300.72 188,-300.72 182,-294.72 182,-288.72 182,-288.72 182,-247.28 182,-247.28 182,-241.28 188,-235.28 194,-235.28 194,-235.28 267.36,-235.28 267.36,-235.28 273.36,-235.28 279.36,-241.28 279.36,-247.28 279.36,-247.28 279.36,-288.72 279.36,-288.72 279.36,-294.72 273.36,-300.72 267.36,-300.72"/>
-<g class="driftwood-icon" transform="translate(218.68 -293) scale(1)" fill="none" stroke="#eb6834" color="#eb6834" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 20.6 7v10L12 21.4 3.4 17V7Z"/><path d="M3.4 7 12 11.4 20.6 7M12 11.4v10"/></g>
+<path fill="#ffffff" stroke="#8a8a8f" stroke-width="1.2" d="M267.36,-300.72C267.36,-300.72 194,-300.72 194,-300.72 188,-300.72 182,-294.72 182,-288.72 182,-288.72 182,-247.28 182,-247.28 182,-241.28 188,-235.28 194,-235.28 194,-235.28 267.36,-235.28 267.36,-235.28 273.36,-235.28 279.36,-241.28 279.36,-247.28 279.36,-247.28 279.36,-288.72 279.36,-288.72 279.36,-294.72 273.36,-300.72 267.36,-300.72"/>
+<g class="driftwood-icon" transform="translate(218.68 -293) scale(1)" fill="none" stroke="#8a8a8f" color="#8a8a8f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 20.6 7v10L12 21.4 3.4 17V7Z"/><path d="M3.4 7 12 11.4 20.6 7M12 11.4v10"/></g>
 <text xml:space="preserve" text-anchor="start" x="188.82" y="-256.5" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="11.00" fill="#111111">shop&#45;orders&#45;api</text>
 <text xml:space="preserve" text-anchor="start" x="187.32" y="-242.2" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#52525b">aws_ecs_task_definition</text>
 </g>
@@ -58,8 +58,8 @@
 <!-- aws_ecs_service.storefront -->
 <g id="node3" class="node">
 <title>aws_ecs_service.storefront</title>
-<path fill="#fdede7" stroke="#eb6834" stroke-width="1.2" d="M103.45,-390.72C103.45,-390.72 34.92,-390.72 34.92,-390.72 28.92,-390.72 22.92,-384.72 22.92,-378.72 22.92,-378.72 22.92,-337.28 22.92,-337.28 22.92,-331.28 28.92,-325.28 34.92,-325.28 34.92,-325.28 103.45,-325.28 103.45,-325.28 109.45,-325.28 115.45,-331.28 115.45,-337.28 115.45,-337.28 115.45,-378.72 115.45,-378.72 115.45,-384.72 109.45,-390.72 103.45,-390.72"/>
-<g class="driftwood-icon" transform="translate(57.19 -383) scale(1)" fill="none" stroke="#eb6834" color="#eb6834" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 20.6 7v10L12 21.4 3.4 17V7Z"/><path d="M8.4 12h7.2M12 8.4v7.2"/></g>
+<path fill="#ffffff" stroke="#8a8a8f" stroke-width="1.2" d="M103.45,-390.72C103.45,-390.72 34.92,-390.72 34.92,-390.72 28.92,-390.72 22.92,-384.72 22.92,-378.72 22.92,-378.72 22.92,-337.28 22.92,-337.28 22.92,-331.28 28.92,-325.28 34.92,-325.28 34.92,-325.28 103.45,-325.28 103.45,-325.28 109.45,-325.28 115.45,-331.28 115.45,-337.28 115.45,-337.28 115.45,-378.72 115.45,-378.72 115.45,-384.72 109.45,-390.72 103.45,-390.72"/>
+<g class="driftwood-icon" transform="translate(57.19 -383) scale(1)" fill="none" stroke="#8a8a8f" color="#8a8a8f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 20.6 7v10L12 21.4 3.4 17V7Z"/><path d="M8.4 12h7.2M12 8.4v7.2"/></g>
 <text xml:space="preserve" text-anchor="start" x="28.24" y="-346.5" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="11.00" fill="#111111">shop&#45;storefront</text>
 <text xml:space="preserve" text-anchor="start" x="38.73" y="-332.2" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#52525b">aws_ecs_service</text>
 </g>
@@ -72,8 +72,8 @@
 <!-- aws_ecs_task_definition.storefront -->
 <g id="node5" class="node">
 <title>aws_ecs_task_definition.storefront</title>
-<path fill="#fdede7" stroke="#eb6834" stroke-width="1.2" d="M267.36,-480.72C267.36,-480.72 194,-480.72 194,-480.72 188,-480.72 182,-474.72 182,-468.72 182,-468.72 182,-427.28 182,-427.28 182,-421.28 188,-415.28 194,-415.28 194,-415.28 267.36,-415.28 267.36,-415.28 273.36,-415.28 279.36,-421.28 279.36,-427.28 279.36,-427.28 279.36,-468.72 279.36,-468.72 279.36,-474.72 273.36,-480.72 267.36,-480.72"/>
-<g class="driftwood-icon" transform="translate(218.68 -473) scale(1)" fill="none" stroke="#eb6834" color="#eb6834" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 20.6 7v10L12 21.4 3.4 17V7Z"/><path d="M3.4 7 12 11.4 20.6 7M12 11.4v10"/></g>
+<path fill="#ffffff" stroke="#8a8a8f" stroke-width="1.2" d="M267.36,-480.72C267.36,-480.72 194,-480.72 194,-480.72 188,-480.72 182,-474.72 182,-468.72 182,-468.72 182,-427.28 182,-427.28 182,-421.28 188,-415.28 194,-415.28 194,-415.28 267.36,-415.28 267.36,-415.28 273.36,-415.28 279.36,-421.28 279.36,-427.28 279.36,-427.28 279.36,-468.72 279.36,-468.72 279.36,-474.72 273.36,-480.72 267.36,-480.72"/>
+<g class="driftwood-icon" transform="translate(218.68 -473) scale(1)" fill="none" stroke="#8a8a8f" color="#8a8a8f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.6 20.6 7v10L12 21.4 3.4 17V7Z"/><path d="M3.4 7 12 11.4 20.6 7M12 11.4v10"/></g>
 <text xml:space="preserve" text-anchor="start" x="189.74" y="-436.5" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="11.00" fill="#111111">shop&#45;storefront</text>
 <text xml:space="preserve" text-anchor="start" x="187.32" y="-422.2" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#52525b">aws_ecs_task_definition</text>
 </g>
@@ -86,8 +86,8 @@
 <!-- aws_lb_target_group.storefront -->
 <g id="node7" class="node">
 <title>aws_lb_target_group.storefront</title>
-<path fill="#e5effa" stroke="#2a78d6" stroke-width="1.2" d="M278.99,-177.72C278.99,-177.72 182.37,-177.72 182.37,-177.72 176.37,-177.72 170.37,-171.72 170.37,-165.72 170.37,-165.72 170.37,-124.28 170.37,-124.28 170.37,-118.28 176.37,-112.28 182.37,-112.28 182.37,-112.28 278.99,-112.28 278.99,-112.28 284.99,-112.28 290.99,-118.28 290.99,-124.28 290.99,-124.28 290.99,-165.72 290.99,-165.72 290.99,-171.72 284.99,-177.72 278.99,-177.72"/>
-<g class="driftwood-icon" transform="translate(218.68 -170) scale(1)" fill="none" stroke="#2a78d6" color="#2a78d6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="5" rx="1.5"/><path d="M12 7.5v3M4 13.5v-3h16v3M12 10.5v3"/><rect x="1.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="9.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="17.5" y="13.5" width="5" height="5" rx="1.5"/></g>
+<path fill="#ffffff" stroke="#8a8a8f" stroke-width="1.2" d="M278.99,-177.72C278.99,-177.72 182.37,-177.72 182.37,-177.72 176.37,-177.72 170.37,-171.72 170.37,-165.72 170.37,-165.72 170.37,-124.28 170.37,-124.28 170.37,-118.28 176.37,-112.28 182.37,-112.28 182.37,-112.28 278.99,-112.28 278.99,-112.28 284.99,-112.28 290.99,-118.28 290.99,-124.28 290.99,-124.28 290.99,-165.72 290.99,-165.72 290.99,-171.72 284.99,-177.72 278.99,-177.72"/>
+<g class="driftwood-icon" transform="translate(218.68 -170) scale(1)" fill="none" stroke="#8a8a8f" color="#8a8a8f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="5" rx="1.5"/><path d="M12 7.5v3M4 13.5v-3h16v3M12 10.5v3"/><rect x="1.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="9.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="17.5" y="13.5" width="5" height="5" rx="1.5"/></g>
 <text xml:space="preserve" text-anchor="start" x="175.69" y="-133.5" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="11.00" fill="#111111">shop&#45;prod&#45;storefront</text>
 <text xml:space="preserve" text-anchor="start" x="193.32" y="-119.2" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#52525b">aws_lb_target_group</text>
 </g>
@@ -100,8 +100,8 @@
 <!-- aws_lb_listener.https -->
 <g id="node6" class="node">
 <title>aws_lb_listener.https</title>
-<path fill="#e5effa" stroke="#2a78d6" stroke-width="1.2" d="M90.08,-132.72C90.08,-132.72 48.29,-132.72 48.29,-132.72 42.29,-132.72 36.29,-126.72 36.29,-120.72 36.29,-120.72 36.29,-79.28 36.29,-79.28 36.29,-73.28 42.29,-67.28 48.29,-67.28 48.29,-67.28 90.08,-67.28 90.08,-67.28 96.08,-67.28 102.08,-73.28 102.08,-79.28 102.08,-79.28 102.08,-120.72 102.08,-120.72 102.08,-126.72 96.08,-132.72 90.08,-132.72"/>
-<g class="driftwood-icon" transform="translate(57.19 -125) scale(1)" fill="none" stroke="#2a78d6" color="#2a78d6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="5" rx="1.5"/><path d="M12 7.5v3M4 13.5v-3h16v3M12 10.5v3"/><rect x="1.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="9.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="17.5" y="13.5" width="5" height="5" rx="1.5"/></g>
+<path fill="#ffffff" stroke="#8a8a8f" stroke-width="1.2" d="M90.08,-132.72C90.08,-132.72 48.29,-132.72 48.29,-132.72 42.29,-132.72 36.29,-126.72 36.29,-120.72 36.29,-120.72 36.29,-79.28 36.29,-79.28 36.29,-73.28 42.29,-67.28 48.29,-67.28 48.29,-67.28 90.08,-67.28 90.08,-67.28 96.08,-67.28 102.08,-73.28 102.08,-79.28 102.08,-79.28 102.08,-120.72 102.08,-120.72 102.08,-126.72 96.08,-132.72 90.08,-132.72"/>
+<g class="driftwood-icon" transform="translate(57.19 -125) scale(1)" fill="none" stroke="#8a8a8f" color="#8a8a8f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="5" rx="1.5"/><path d="M12 7.5v3M4 13.5v-3h16v3M12 10.5v3"/><rect x="1.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="9.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="17.5" y="13.5" width="5" height="5" rx="1.5"/></g>
 <text xml:space="preserve" text-anchor="start" x="55.74" y="-88.5" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="11.00" fill="#111111">https</text>
 <text xml:space="preserve" text-anchor="start" x="41.61" y="-74.2" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#52525b">aws_lb_listener</text>
 </g>
@@ -114,8 +114,8 @@
 <!-- aws_lb.api -->
 <g id="node8" class="node">
 <title>aws_lb.api</title>
-<path fill="#e5effa" stroke="#2a78d6" stroke-width="1.2" d="M260.97,-87.72C260.97,-87.72 200.4,-87.72 200.4,-87.72 194.4,-87.72 188.4,-81.72 188.4,-75.72 188.4,-75.72 188.4,-34.28 188.4,-34.28 188.4,-28.28 194.4,-22.28 200.4,-22.28 200.4,-22.28 260.97,-22.28 260.97,-22.28 266.97,-22.28 272.97,-28.28 272.97,-34.28 272.97,-34.28 272.97,-75.72 272.97,-75.72 272.97,-81.72 266.97,-87.72 260.97,-87.72"/>
-<g class="driftwood-icon" transform="translate(218.69 -80) scale(1)" fill="none" stroke="#2a78d6" color="#2a78d6" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="5" rx="1.5"/><path d="M12 7.5v3M4 13.5v-3h16v3M12 10.5v3"/><rect x="1.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="9.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="17.5" y="13.5" width="5" height="5" rx="1.5"/></g>
+<path fill="#ffffff" stroke="#8a8a8f" stroke-width="1.2" d="M260.97,-87.72C260.97,-87.72 200.4,-87.72 200.4,-87.72 194.4,-87.72 188.4,-81.72 188.4,-75.72 188.4,-75.72 188.4,-34.28 188.4,-34.28 188.4,-28.28 194.4,-22.28 200.4,-22.28 200.4,-22.28 260.97,-22.28 260.97,-22.28 266.97,-22.28 272.97,-28.28 272.97,-34.28 272.97,-34.28 272.97,-75.72 272.97,-75.72 272.97,-81.72 266.97,-87.72 260.97,-87.72"/>
+<g class="driftwood-icon" transform="translate(218.69 -80) scale(1)" fill="none" stroke="#8a8a8f" color="#8a8a8f" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2.5" width="6" height="5" rx="1.5"/><path d="M12 7.5v3M4 13.5v-3h16v3M12 10.5v3"/><rect x="1.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="9.5" y="13.5" width="5" height="5" rx="1.5"/><rect x="17.5" y="13.5" width="5" height="5" rx="1.5"/></g>
 <text xml:space="preserve" text-anchor="start" x="193.72" y="-43.5" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="11.00" fill="#111111">shop&#45;prod&#45;alb</text>
 <text xml:space="preserve" text-anchor="start" x="218.23" y="-29.2" font-family="Helvetica,sans-Serif" font-size="8.00" fill="#52525b">aws_lb</text>
 </g>
