@@ -1,3 +1,6 @@
+import { LIGHT } from '../design.js'
+import type { Swatch } from '../design.js'
+
 /**
  * Icons for rendered diagrams.
  *
@@ -31,21 +34,26 @@
  */
 export type Family = 'edge' | 'compute' | 'data' | 'messaging' | 'security' | 'observability' | 'other'
 
-export interface FamilyStyle {
-  /** Border and icon colour. */
-  accent: string
-  /** Node fill — a wash of the accent, light enough for 9pt text on top. */
-  tint: string
-}
+export type FamilyStyle = Swatch
+
+/**
+ * Every family draws the same neutral card. Following the design system's
+ * diagram rule (@brignano/design, DESIGN.md §9), a node's kind is carried by
+ * its icon and its label, and colour is kept for state (health, and what a
+ * deploy or plan changed), so the one thing that is down is the one thing
+ * that stands out. Families stay in the model of this module because they
+ * still decide shapes and give renderers a hook, not because they get a hue.
+ */
+const NEUTRAL: FamilyStyle = { accent: LIGHT.slate, tint: LIGHT.card }
 
 export const PALETTE: Record<Family, FamilyStyle> = {
-  edge: { accent: '#0284c7', tint: '#f0f9ff' },
-  compute: { accent: '#d97706', tint: '#fffbeb' },
-  data: { accent: '#059669', tint: '#ecfdf5' },
-  messaging: { accent: '#7c3aed', tint: '#f5f3ff' },
-  security: { accent: '#e11d48', tint: '#fff1f2' },
-  observability: { accent: '#475569', tint: '#f8fafc' },
-  other: { accent: '#64748b', tint: '#f8fafc' },
+  edge: NEUTRAL,
+  compute: NEUTRAL,
+  data: NEUTRAL,
+  messaging: NEUTRAL,
+  security: NEUTRAL,
+  observability: NEUTRAL,
+  other: NEUTRAL,
 }
 
 export type IconKey =

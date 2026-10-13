@@ -1,4 +1,6 @@
 import type { Entity, Model } from '../model/schema.js'
+import { LIGHT } from '../design.js'
+import type { Swatch } from '../design.js'
 import { PALETTE, familyFor, iconFor, kindLabel } from './icons.js'
 import type { Family, IconKey } from './icons.js'
 import { selectEntities } from './select.js'
@@ -66,15 +68,29 @@ const MARK_LABELS: Record<ChangeMark, string> = {
  * when both are drawn, still owns the fill. Destroy is dashed as well as red:
  * colour alone must not carry the meaning.
  */
+const MARK_COLORS: Record<ChangeMark, Swatch> = {
+  create: LIGHT.success,
+  update: LIGHT.interactive,
+  replace: LIGHT.attention,
+  destroy: LIGHT.danger,
+}
 const MARK_STYLES: Record<ChangeMark, string> = {
-  create: 'stroke:#7c3aed,stroke-width:3px',
-  update: 'stroke:#0891b2,stroke-width:3px',
-  replace: 'stroke:#d97706,stroke-width:3px',
-  destroy: 'stroke:#dc2626,stroke-width:3px,stroke-dasharray:6 4',
+  create: `stroke:${MARK_COLORS.create.accent},stroke-width:3px`,
+  update: `stroke:${MARK_COLORS.update.accent},stroke-width:3px`,
+  replace: `stroke:${MARK_COLORS.replace.accent},stroke-width:3px`,
+  destroy: `stroke:${MARK_COLORS.destroy.accent},stroke-width:3px,stroke-dasharray:6 4`,
 }
 
-function renderNode(e: Entity, mark?: ChangeMark): string {
-  const lines = [e.name ?? e.id, kindLabel(e.kind, e.platform), ...(mark ? [MARK_LABELS[mark]] : [])]
+/** Health fills, the design system's state washes, worded in the label too. Healthy is not coloured. */
+const HEALTH_COLORS: Record<string, Swatch> = {
+  healthy: { accent: LIGHT.slate, tint: LIGHT.card },
+  degraded: LIGHT.attention,
+  down: LIGHT.danger,
+}
+
+function renderNode(e: Entity, mark?: ChangeMark, health?: string): string {
+  const kind = kindLabel(e.kind, e.platform) + (health ? ` · ${health}` : '')
+  const lines = [e.name ?? e.id, kind, ...(mark ? [MARK_LABELS[mark]] : [])]
   const label = escapeLabel(lines.join('\n'))
   const id = nodeId(e.id)
   const shape = SHAPES[iconFor(e.kind)]
@@ -108,10 +124,10 @@ export function renderMermaid(model: Model, opts: RenderOptions = {}): string {
 
   for (const [group, members] of [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     lines.push(`    subgraph ${nodeId(group)}["${escapeLabel(group)}"]`)
-    for (const e of members) lines.push(`        ${renderNode(e, opts.marks?.[e.id])}`)
+    for (const e of members) lines.push(`        ${renderNode(e, opts.marks?.[e.id], opts.health?.[e.id])}`)
     lines.push('    end')
   }
-  for (const e of ungrouped) lines.push(`    ${renderNode(e, opts.marks?.[e.id])}`)
+  for (const e of ungrouped) lines.push(`    ${renderNode(e, opts.marks?.[e.id], opts.health?.[e.id])}`)
 
   // An edge is only drawn when both ends survived the view filter. Mermaid
   // styles links by their position, so the index of each marked one is kept.
@@ -125,7 +141,7 @@ export function renderMermaid(model: Model, opts: RenderOptions = {}): string {
     const arrow = mark === 'removed' ? '-.->' : mark === 'added' ? '==>' : '-->'
     lines.push(`    ${nodeId(edge.from)} ${arrow}${label} ${nodeId(edge.to)}`)
     // No hex colour right before a `;`: Mermaid reads `#7c3aed;` as an entity code.
-    if (mark) linkStyles.push(`    linkStyle ${index} stroke:${mark === 'added' ? '#7c3aed' : '#dc2626'},stroke-width:2px`)
+    if (mark) linkStyles.push(`    linkStyle ${index} stroke:${mark === 'added' ? MARK_COLORS.create.accent : MARK_COLORS.destroy.accent},stroke-width:2px`)
     index++
   }
   lines.push(...linkStyles)
@@ -140,7 +156,7 @@ export function renderMermaid(model: Model, opts: RenderOptions = {}): string {
   }
   for (const family of [...families].sort()) {
     const { accent, tint } = PALETTE[family]
-    lines.push(`    classDef f_${family} fill:${tint},stroke:${accent},color:#0f172a;`)
+    lines.push(`    classDef f_${family} fill:${tint},stroke:${accent},color:${LIGHT.ink};`)
   }
 
   if (opts.health) {
@@ -149,9 +165,9 @@ export function renderMermaid(model: Model, opts: RenderOptions = {}): string {
       if (!visible.has(id)) continue
       lines.push(`    class ${nodeId(id)} ${status};`)
     }
-    lines.push('    classDef healthy fill:#0b6b3a,stroke:#0f9d58,color:#fff;')
-    lines.push('    classDef degraded fill:#7a5b00,stroke:#f4b400,color:#fff;')
-    lines.push('    classDef down fill:#7a1c1c,stroke:#db4437,color:#fff;')
+    for (const [status, { accent, tint }] of Object.entries(HEALTH_COLORS)) {
+      lines.push(`    classDef ${status} fill:${tint},stroke:${accent},color:${LIGHT.ink};`)
+    }
   }
 
   if (opts.marks) {
