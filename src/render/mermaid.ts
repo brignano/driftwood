@@ -69,10 +69,10 @@ const MARK_LABELS: Record<ChangeMark, string> = {
  * colour alone must not carry the meaning.
  */
 const MARK_COLORS: Record<ChangeMark, Swatch> = {
-  create: LIGHT.success,
-  update: LIGHT.interactive,
+  create: LIGHT.diffAdded,
+  update: LIGHT.diffChanged,
   replace: LIGHT.attention,
-  destroy: LIGHT.danger,
+  destroy: LIGHT.diffRemoved,
 }
 const MARK_STYLES: Record<ChangeMark, string> = {
   create: `stroke:${MARK_COLORS.create.accent},stroke-width:3px`,

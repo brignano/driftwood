@@ -99,4 +99,8 @@ export const LIGHT = {
   success: swatch('--success'),
   attention: swatch('--attention'),
   danger: swatch('--danger'),
+  /** What a change did (`--diff-*`, aliases of the state hues). */
+  diffAdded: swatch('--diff-added'),
+  diffChanged: swatch('--diff-changed'),
+  diffRemoved: swatch('--diff-removed'),
 } as const
