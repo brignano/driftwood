@@ -12,11 +12,16 @@
 #   npm publish --access public
 #
 # After that, configure the trusted publisher and every release is tokenless.
+#
+# The release is the only trigger, and its tag is the version: publishing
+# release `v1.2.3` (or `1.2.3`) publishes 1.2.3, whatever package.json says on
+# that commit. There is no version-bump commit to remember. If the tag is not a
+# version, the release name is tried, and failing both the job stops before
+# anything is published.
 
 name: Publish Package
 
 on:
-  workflow_dispatch:
   release:
     # `published` fires both when publishing directly and when publishing a
     # previously-saved draft. `created` does neither for drafts, which silently
@@ -49,6 +54,25 @@ jobs:
         run: |
           npm install -g npm@latest
           npm --version
+      - name: Take the version from the release
+        env:
+          # Passed through env rather than interpolated into the script: a
+          # release name is free text, and must never become shell.
+          TAG: ${{ github.event.release.tag_name }}
+          NAME: ${{ github.event.release.name }}
+        run: |
+          semver='^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+          for candidate in "$TAG" "$NAME"; do
+            version="${candidate#v}"
+            if [[ "$version" =~ $semver ]]; then
+              # Rewrites package.json (and the lockfile) in the runner only; the
+              # CLI's --version reads package.json, so it reports this too.
+              npm version "$version" --no-git-tag-version --allow-same-version
+              exit 0
+            fi
+          done
+          echo "::error::Neither the release tag ('$TAG') nor its name ('$NAME') is a version like v1.2.3."
+          exit 1
       - run: npm ci
       - run: npm run build
       - name: Show what will actually be published
