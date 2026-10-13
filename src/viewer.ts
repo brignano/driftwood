@@ -91,8 +91,8 @@ nav .eyebrow { padding: 0 10px var(--s2); }
 .legend { display: flex; gap: var(--s3); flex-wrap: wrap; align-items: center; font-size: var(--text-sm); color: var(--ink-soft); }
 .tag { display: inline-block; font: 500 10px/1.5 var(--mono); padding: 0 6px; border-radius: 4px; border: 1px solid var(--line-strong);
   color: var(--ink-soft); background: var(--card); white-space: nowrap; }
-.tag.added { color: var(--success-ink); border-color: var(--success); }
-.tag.changed { color: var(--i-ink); border-color: var(--i); }
+.tag.added { color: var(--diff-added-ink); border-color: var(--diff-added); }
+.tag.changed { color: var(--diff-changed-ink); border-color: var(--diff-changed); }
 .tag.removed { border-style: dashed; }
 .tag.down { color: var(--danger-ink); border-color: var(--danger); }
 .tag.degraded { color: var(--attention-ink); border-color: var(--attention); }
@@ -130,8 +130,8 @@ dt { color: var(--ink-soft); } dd { margin: 0; overflow-wrap: anywhere; }
 .diagram .edge > text { fill: var(--ink-soft); }
 .diagram .dw-degraded > path, .diagram .dw-degraded > polygon { fill: var(--attention-surface); stroke: var(--attention); stroke-width: 2; }
 .diagram .dw-down > path, .diagram .dw-down > polygon { fill: var(--danger-surface); stroke: var(--danger); stroke-width: 2; }
-.diagram .dw-added > path, .diagram .dw-added > polygon { stroke: var(--success); stroke-width: 2.5; }
-.diagram .dw-changed > path, .diagram .dw-changed > polygon { stroke: var(--i); stroke-width: 2.5; }
+.diagram .dw-added > path, .diagram .dw-added > polygon { stroke: var(--diff-added); stroke-width: 2.5; }
+.diagram .dw-changed > path, .diagram .dw-changed > polygon { stroke: var(--diff-changed); stroke-width: 2.5; }
 .dw-focus .node, .dw-focus .edge { opacity: .3; }
 .dw-focus .node.dw-on, .dw-focus .edge.dw-on { opacity: 1; }
 .dw-focus .edge.dw-on > path { stroke: var(--ink); stroke-width: 1.6; }

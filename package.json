@@ -46,7 +46,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@brignano/design": "^0.1.2",
+    "@brignano/design": "^0.2.0",
     "@hpcc-js/wasm-graphviz": "^1.28.0",
     "commander": "^12.1.0",
     "yaml": "^2.5.1",
