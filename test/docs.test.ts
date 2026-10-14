@@ -98,7 +98,7 @@ describe('the snapshot-after-deploy template', () => {
 
   it('uses flags the CLI actually has', () => {
     const cli = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8')
-    for (const flag of ['--terraform', '--app', '--env', '--build', '--model', '--store', '--origin']) {
+    for (const flag of ['--terraform', '--app', '--env', '--build', '--model', '--store', '--origin', '--group-by', '--collapse']) {
       expect(template).toContain(flag)
       expect(cli, `the template passes ${flag}, which the CLI no longer defines`).toContain(`'${flag} <`)
     }
@@ -128,7 +128,7 @@ describe('the plan-preview template', () => {
 
   it('uses flags the CLI actually has', () => {
     const cli = readFileSync(new URL('../src/cli.ts', import.meta.url), 'utf8')
-    for (const flag of ['--plan', '--model', '--title', '--out-dir']) {
+    for (const flag of ['--plan', '--model', '--title', '--out-dir', '--group-by']) {
       expect(template).toContain(flag)
       expect(cli, `the template passes ${flag}, which the CLI no longer defines`).toMatch(new RegExp(`'(-\\w, )?${flag} <`))
     }

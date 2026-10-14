@@ -43,12 +43,28 @@ export type Edge = z.infer<typeof Edge>
  * 150 nodes, so views exist from v1 rather than being a later optimization.
  * Patterns match an entity's id or group, and support a trailing `*`.
  */
+/**
+ * How a picture boxes its nodes: by each entity's `group` (for Terraform, the
+ * resource type's service, `ecs` or `s3`), or by the Terraform module that
+ * owns it. Render-time only; `group` itself never changes.
+ */
+export const GroupBy = z.enum(['group', 'module'])
+export type GroupBy = z.infer<typeof GroupBy>
+
 export const View = z.object({
   id: z.string().min(1),
   title: z.string().optional(),
   level: Level.default('container'),
   include: z.array(z.string()).default([]),
   exclude: z.array(z.string()).default([]),
+  groupBy: GroupBy.optional(),
+  /**
+   * Terraform modules to draw as one node each, matched like `include` (`*`
+   * for every top-level module, `module.ecs_service` for every instance of a
+   * counted one). The outermost match wins. Arrows into and out of the module
+   * are kept, drawn to and from that node.
+   */
+  collapse: z.array(z.string()).optional(),
 })
 export type View = z.infer<typeof View>
 

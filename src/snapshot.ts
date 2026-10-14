@@ -7,6 +7,8 @@ import type { SourcedModel } from './model/merge.js'
 import { Observation, formatObservation, toObservation } from './model/observation.js'
 import { COMPARED_FIELDS, reconcile } from './reconcile/index.js'
 import { resolveRenderer } from './render/index.js'
+import { arrange } from './render/arrange.js'
+import type { GroupBy, RenderContext } from './render/types.js'
 import { HealthStatus } from './health.js'
 import type { HealthMap } from './health.js'
 import { renderViewer } from './viewer.js'
@@ -82,6 +84,12 @@ export const SnapshotDiagram = z.object({
   file: z.string(),
   renderer: z.string(),
   via: z.string(),
+  /**
+   * Collapsed Terraform modules in this diagram, by node id, and the entity
+   * ids each stands for, so a viewer can map a click on the module to what is
+   * inside it. Absent when nothing was collapsed.
+   */
+  members: z.record(z.array(z.string())).optional(),
 })
 export type SnapshotDiagram = z.infer<typeof SnapshotDiagram>
 
@@ -131,6 +139,10 @@ export interface SnapshotOptions {
   engine?: string
   direction?: 'LR' | 'TD'
   icons?: boolean
+  /** How diagrams box their nodes where a view does not say. */
+  groupBy?: GroupBy
+  /** Modules to draw as one node each where a view does not say; see `View.collapse`. */
+  collapse?: string[]
   now?: Date
 }
 
@@ -213,7 +225,17 @@ export async function takeSnapshot(opts: SnapshotOptions): Promise<SnapshotBundl
   const observation = toObservation(model, opts.sources, opts.origin, opts.now)
 
   const { renderer, via, fellBackFrom } = await resolveRenderer(opts.engine ?? 'auto')
-  const ctx = { direction: opts.direction ?? 'LR', health: opts.health, icons: opts.icons ?? true }
+  const ctx: RenderContext = {
+    direction: opts.direction ?? 'LR',
+    health: opts.health,
+    icons: opts.icons ?? true,
+    groupBy: opts.groupBy,
+    collapse: opts.collapse,
+  }
+  const membersOf = (view?: string) => {
+    const { members } = arrange(model, { ...ctx, view })
+    return Object.keys(members).length ? { members } : {}
+  }
 
   const files: Record<string, string> = {}
   const diagrams: SnapshotDiagram[] = []
@@ -222,7 +244,7 @@ export async function takeSnapshot(opts: SnapshotOptions): Promise<SnapshotBundl
   const overview = `diagram.${renderer.extension}`
   files[overview] = await renderer.render(model, ctx)
   used.add(overview)
-  diagrams.push({ title: model.name, file: overview, renderer: renderer.name, via })
+  diagrams.push({ title: model.name, file: overview, renderer: renderer.name, via, ...membersOf() })
 
   for (const view of views) {
     let file = `diagram-${fileStem(view.id)}.${renderer.extension}`
@@ -230,7 +252,14 @@ export async function takeSnapshot(opts: SnapshotOptions): Promise<SnapshotBundl
     for (let n = 2; used.has(file); n++) file = `diagram-${fileStem(view.id)}-${n}.${renderer.extension}`
     used.add(file)
     files[file] = await renderer.render(model, { ...ctx, view: view.id })
-    diagrams.push({ view: view.id, title: view.title ?? view.id, file, renderer: renderer.name, via })
+    diagrams.push({
+      view: view.id,
+      title: view.title ?? view.id,
+      file,
+      renderer: renderer.name,
+      via,
+      ...membersOf(view.id),
+    })
   }
 
   const snapshot = Snapshot.parse({

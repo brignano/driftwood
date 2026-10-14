@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import type { Model } from '../model/schema.js'
 import { renderDot } from './dot.js'
+import { arrange } from './arrange.js'
 import { PALETTE, injectIcons, styleFor } from './icons.js'
 import { defineRenderer } from './types.js'
 import type { Availability, RenderContext } from './types.js'
@@ -125,14 +126,16 @@ function runNativeDot(source: string, engine: string, format: string): Promise<s
  * uses it, and `auto` must keep choosing for itself.
  */
 export async function renderGraphvizSvg(
-  model: Model,
-  ctx: RenderContext = {},
+  input: Model,
+  inputCtx: RenderContext = {},
   forceTier?: Exclude<GraphvizTier, 'none'>,
 ): Promise<string> {
   // Icons are on unless switched off: this renderer produces the finished
   // picture, so it is the one place a marker can actually become artwork.
-  const withIcons = ctx.icons !== false
-  const source = renderDot(model, { ...ctx, icons: withIcons })
+  const withIcons = inputCtx.icons !== false
+  const arranged = arrange(input, inputCtx)
+  const model = arranged.model
+  const source = renderDot(model, { ...arranged.ctx, icons: withIcons })
 
   // Colour by the entity's own kind rather than by anything in the SVG, so the
   // icon always matches the border Graphviz drew around it.

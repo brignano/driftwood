@@ -394,3 +394,36 @@ describe('real Terraform output', () => {
     ])
   })
 })
+
+describe('a plan touching modules called with count and for_each', () => {
+  // Real Terraform 1.9.5 output. The plan changes the service in every
+  // instance of module.svc and module.single, changes module.obs's monitor
+  // (whose only reference is a `var.` its caller fills from
+  // module.svc["api"]), and adds terraform_data.extra reading an output of
+  // module.svc["worker"].
+  const { preview, diagram } = previewPlan(parseTerraformPlan(read('./fixtures/modules.plan.json')))
+
+  it('follows a module output to the resource behind it, in the instance named', () => {
+    expect(preview.changes.create).toEqual(['terraform_data.extra'])
+    expect(preview.changes.edges.added).toEqual([
+      { from: 'terraform_data.extra', to: 'module.svc["worker"].terraform_data.service', kind: 'depends-on' },
+    ])
+  })
+
+  it('reports no relationship going away when only a var. carried it across the module boundary', () => {
+    expect(preview.changes.update).toContain('module.obs.terraform_data.monitor')
+    expect(preview.changes.edges.removed).toEqual([])
+  })
+
+  it('can box the diagram by module', () => {
+    const grouped = previewPlan(parseTerraformPlan(read('./fixtures/modules.plan.json')), { groupBy: 'module' }).diagram!
+    expect(grouped).toContain('subgraph n_module_svc__worker__["module.svc[&quot;worker&quot;]"]')
+    expect(diagram).not.toContain('module.svc[&quot;worker&quot;]"]')
+  })
+
+  it('marks a collapsed module by what the plan does inside it', () => {
+    const collapsed = previewPlan(parseTerraformPlan(read('./fixtures/modules.plan.json')), { collapse: ['module.svc'] }).diagram!
+    expect(collapsed).toMatch(/n_module_svc__worker__\[\["svc\[&quot;worker&quot;\]<br\/>module · 1 resource<br\/>~ update"\]\]/)
+    expect(collapsed).toContain('n_terraform_data_extra ==> n_module_svc__worker__')
+  })
+})

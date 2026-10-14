@@ -3,7 +3,7 @@ import { LIGHT } from '../design.js'
 import type { Swatch } from '../design.js'
 import { PALETTE, familyFor, iconFor, kindLabel } from './icons.js'
 import type { Family, IconKey } from './icons.js'
-import { selectEntities } from './select.js'
+import { arrange } from './arrange.js'
 import { defineRenderer } from './types.js'
 import type { ChangeMark, RenderContext } from './types.js'
 
@@ -53,6 +53,8 @@ const SHAPES: Partial<Record<IconKey, (id: string, label: string) => string>> = 
   secret: (id, l) => `${id}{{"${l}"}}`,
   certificate: (id, l) => `${id}{{"${l}"}}`,
   firewall: (id, l) => `${id}{{"${l}"}}`,
+  // Mermaid's subroutine box: a box that stands for more boxes.
+  module: (id, l) => `${id}[["${l}"]]`,
 }
 
 /** Terraform's plan symbols, so the label reads the way `terraform plan` prints. */
@@ -99,13 +101,10 @@ function renderNode(e: Entity, mark?: ChangeMark, health?: string): string {
 
 export type RenderOptions = RenderContext
 
-export function renderMermaid(model: Model, opts: RenderOptions = {}): string {
-  const view = opts.view ? model.views.find((v) => v.id === opts.view) : undefined
-  if (opts.view && !view) {
-    throw new Error(`unknown view: ${opts.view} (have: ${model.views.map((v) => v.id).join(', ') || 'none'})`)
-  }
+export function renderMermaid(input: Model, inputOpts: RenderOptions = {}): string {
+  const { model, ctx: opts } = arrange(input, inputOpts)
 
-  const entities = selectEntities(model, view)
+  const entities = model.entities
   const visible = new Set(entities.map((e) => e.id))
   const lines: string[] = [`flowchart ${opts.direction ?? 'LR'}`]
 

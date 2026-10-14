@@ -2,11 +2,12 @@ import { z } from 'zod'
 import { Edge } from './model/schema.js'
 import type { Entity, Model } from './model/schema.js'
 import { matches } from './model/validate.js'
+import { AddressIndex, configAddress } from './model/terraform-address.js'
 import { importTerraformState, resourceAddress, stateFromValues } from './providers/terraform.js'
 import type { TfValues } from './providers/terraform.js'
 import { reconcile } from './reconcile/index.js'
 import { renderMermaid } from './render/mermaid.js'
-import type { ChangeMark } from './render/types.js'
+import type { ChangeMark, GroupBy } from './render/types.js'
 import { SnapshotDrift, driftFrom } from './snapshot.js'
 
 /**
@@ -48,9 +49,16 @@ interface TfConfigResource {
   depends_on?: string[]
 }
 
+interface TfConfigModuleCall {
+  /** The call's arguments, which are the called module's `var.`s. */
+  expressions?: Record<string, unknown>
+  module?: TfConfigModule
+}
+
 interface TfConfigModule {
   resources?: TfConfigResource[]
-  module_calls?: Record<string, { module?: TfConfigModule }>
+  module_calls?: Record<string, TfConfigModuleCall>
+  outputs?: Record<string, { expression?: unknown }>
 }
 
 export const PlanChanges = z.object({
@@ -93,6 +101,10 @@ export interface PreviewOptions {
   includeDataSources?: boolean
   /** Names the preview, usually the workspace or root module. */
   title?: string
+  /** Box the diagram's nodes by Terraform module rather than by `group`. */
+  groupBy?: GroupBy
+  /** Modules to draw as one node each; see `View.collapse`. */
+  collapse?: string[]
 }
 
 export interface PreviewResult {
@@ -177,48 +189,110 @@ function collectReferences(node: unknown, into: string[]): void {
 }
 
 /**
- * `aws_sqs_queue.orders.arn` and `data.aws_iam_policy_document.p.json` name
- * the resources `aws_sqs_queue.orders` and `aws_iam_policy_document.p`.
- * `var.`, `local.`, `each.` and module outputs name no resource and resolve to
- * nothing, which the caller drops.
+ * Where a reference is read: the module it is written in, the address prefix
+ * of that module, and how its `var.`s resolve, which is through the arguments
+ * of the call that instantiated it.
  */
-function referencedEntity(ref: string, prefix: string): string | undefined {
+interface Scope {
+  module: TfConfigModule
+  prefix: string
+  vars?: (name: string, depth: number) => string[]
+}
+
+const MODULE_REF = /^module\.([A-Za-z_][A-Za-z0-9_-]*)(\[(?:"(?:[^"\\]|\\.)*"|[0-9]+)\])?(?:\.([A-Za-z_][A-Za-z0-9_-]*))?/
+
+// Outputs feeding outputs feeding arguments cannot loop in a valid
+// configuration, but a plan is input, and input does not get to hang the tool.
+const MAX_DEPTH = 32
+
+function referencesIn(node: unknown): string[] {
+  const refs: string[] = []
+  collectReferences(node, refs)
+  return refs
+}
+
+/**
+ * The resources a reference reaches, as addresses that may leave module keys
+ * out (an `AddressIndex` resolves them). `aws_sqs_queue.orders.arn` and
+ * `data.aws_iam_policy_document.p.json` name the resources
+ * `aws_sqs_queue.orders` and `aws_iam_policy_document.p`. A module output,
+ * `module.svc["api"].service_arn`, names whatever that output reads inside
+ * that instance of the module, and `var.vpc_id` inside a module names
+ * whatever its caller passed in. Without following those two, every arrow
+ * across a module boundary is lost, and an ECS service built by a wrapper
+ * module depends on nothing. `local.`, `each.`, `count.` and the rest name no
+ * resource and resolve to nothing.
+ */
+function resolveReference(ref: string, scope: Scope, depth: number): string[] {
+  if (depth > MAX_DEPTH) return []
+  if (ref.startsWith('var.')) return scope.vars?.(ref.split('.')[1] ?? '', depth + 1) ?? []
+  const call = MODULE_REF.exec(ref)
+  if (call) {
+    const [, name, key = '', output] = call
+    const target = scope.module.module_calls?.[name!]
+    if (!target?.module) return []
+    const child: Scope = {
+      module: target.module,
+      prefix: `${scope.prefix}module.${name}${key}.`,
+      vars: (v, d) => referencesIn(target.expressions?.[v]).flatMap((r) => resolveReference(r, scope, d + 1)),
+    }
+    // `module.svc` alone, say inside `values(module.svc)`, reads every output.
+    const outputs = output ? [output] : Object.keys(target.module.outputs ?? {})
+    return outputs.flatMap((o) =>
+      referencesIn(target.module?.outputs?.[o]?.expression).flatMap((r) => resolveReference(r, child, depth + 1)),
+    )
+  }
   const parts = ref.split('.')
   if (parts[0] === 'data') parts.shift()
   const [type, name] = parts
-  if (!type || !name || ['var', 'local', 'each', 'count', 'path', 'module', 'terraform', 'self'].includes(type)) {
-    return undefined
-  }
-  return prefix + resourceAddress(`${type}.${name}`)
+  if (!type || !name || ['local', 'each', 'count', 'path', 'terraform', 'self'].includes(type)) return []
+  return [scope.prefix + resourceAddress(`${type}.${name}`)]
+}
+
+/**
+ * Terraform lists a module output reference twice, `module.svc["api"].arn`
+ * and `module.svc["api"]`. The bare one would read every output of the
+ * module, so it counts only when nothing more specific came with it.
+ */
+function withoutRedundantModuleRefs(refs: string[]): string[] {
+  return refs.filter((ref) => {
+    const m = MODULE_REF.exec(ref)
+    if (!m || m[3] !== undefined) return true
+    return !refs.some((other) => other !== ref && other.startsWith(`${ref}.`))
+  })
 }
 
 /**
  * Dependencies as the configuration in the plan states them: what each
- * resource will depend on once applied. State only knows what it depended on
- * at the last apply, which is stale for exactly the resources a plan touches.
+ * resource will depend on once applied, keyed by configuration address (no
+ * module keys), because one resource block in a counted module is several
+ * resources. State only knows what it depended on at the last apply, which is
+ * stale for exactly the resources a plan touches.
  */
 function configuredDependencies(plan: TfPlan): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>()
-  const visit = (module: TfConfigModule | undefined, prefix: string) => {
-    if (!module) return
-    for (const r of module.resources ?? []) {
+  const visit = (scope: Scope) => {
+    for (const r of scope.module.resources ?? []) {
       if (!r.type || !r.name) continue
-      const from = `${prefix}${r.type}.${r.name}`
-      const refs: string[] = []
-      collectReferences(r.expressions, refs)
-      for (const d of r.depends_on ?? []) refs.push(d)
+      const from = `${scope.prefix}${r.type}.${r.name}`
+      const refs = withoutRedundantModuleRefs([...referencesIn(r.expressions), ...(r.depends_on ?? [])])
       const deps = out.get(from) ?? new Set<string>()
       for (const ref of refs) {
-        const to = referencedEntity(ref, prefix)
-        if (to && to !== from) deps.add(to)
+        for (const to of resolveReference(ref, scope, 0)) if (to !== from) deps.add(to)
       }
       out.set(from, deps)
     }
-    for (const [name, call] of Object.entries(module.module_calls ?? {})) {
-      visit(call.module, `${prefix}module.${name}.`)
+    for (const [name, call] of Object.entries(scope.module.module_calls ?? {})) {
+      if (!call.module) continue
+      visit({
+        module: call.module,
+        prefix: `${scope.prefix}module.${name}.`,
+        vars: (v, d) => referencesIn(call.expressions?.[v]).flatMap((r) => resolveReference(r, scope, d + 1)),
+      })
     }
   }
-  visit(plan.configuration?.root_module, '')
+  const root = plan.configuration?.root_module
+  if (root) visit({ module: root, prefix: '' })
   return out
 }
 
@@ -235,21 +309,25 @@ function afterModel(plan: TfPlan, before: Model, touched: Set<string>, includeDa
     modelName: before.name,
   })
   const known = new Set(after.entities.map((e) => e.id))
+  const index = new AddressIndex(known)
   const configured = plan.configuration ? configuredDependencies(plan) : undefined
+  const configuredFor = (id: string) => configured?.get(configAddress(id))
   const edges: Edge[] = []
   const seen = new Set<string>()
   const push = (from: string, to: string) => {
     const key = `${from}\u0000${to}`
-    if (seen.has(key) || !known.has(from) || !known.has(to)) return
+    if (seen.has(key) || from === to || !known.has(from) || !known.has(to)) return
     seen.add(key)
     edges.push({ from, to, kind: 'depends-on' })
   }
   for (const e of before.edges) {
-    if (configured && touched.has(e.from) && configured.has(e.from)) continue
+    if (touched.has(e.from) && configuredFor(e.from)) continue
     push(e.from, e.to)
   }
   if (configured) {
-    for (const id of touched) for (const to of configured.get(id) ?? []) push(id, to)
+    for (const id of touched) {
+      for (const to of configuredFor(id) ?? []) for (const resolved of index.resolve(to, id)) push(id, resolved)
+    }
     // State records every dependency, transitive ones included, where the
     // configuration names only direct references. A touched resource's state
     // edge therefore still holds if its target is reachable through the new
@@ -269,9 +347,12 @@ function afterModel(plan: TfPlan, before: Model, touched: Set<string>, includeDa
       return seenFrom
     }
     for (const id of touched) {
-      if (!configured.has(id)) continue
-      const still = reachable(id)
-      for (const e of before.edges) if (e.from === id && still.has(e.to)) push(e.from, e.to)
+      if (!configuredFor(id)) continue
+      // Compared without module keys: state recorded a dependency on
+      // `module.svc` as one on every instance of it, so the configuration
+      // naming only `module.svc["api"]` is the same fact, not a removal.
+      const still = new Set([...reachable(id)].map(configAddress))
+      for (const e of before.edges) if (e.from === id && still.has(configAddress(e.to))) push(e.from, e.to)
     }
   }
   after.edges = edges.sort((a, b) => (a.from + a.to).localeCompare(b.from + b.to))
@@ -400,7 +481,13 @@ export function previewPlan(plan: TfPlan, opts: PreviewOptions = {}): PreviewRes
     ...changes.edges.removed.map((e) => ({ from: e.from, to: e.to, mark: 'removed' as const })),
   ]
   const diagram = picture
-    ? renderMermaid(picture.model, { direction: 'LR', marks: Object.fromEntries(marks), edgeMarks })
+    ? renderMermaid(picture.model, {
+        direction: 'LR',
+        marks: Object.fromEntries(marks),
+        edgeMarks,
+        groupBy: opts.groupBy,
+        collapse: opts.collapse,
+      })
     : undefined
   const entities = new Map([...before.entities, ...after.entities].map((e) => [e.id, e]))
   const comment = formatPreviewComment(preview, { diagram, neighbours: picture?.neighbours ?? true, entities })

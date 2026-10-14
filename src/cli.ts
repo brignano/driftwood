@@ -2,7 +2,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createRequire } from 'node:module'
-import { Command } from 'commander'
+import { Command, InvalidArgumentError } from 'commander'
 import { dumpModel, loadModel } from './model/validate.js'
 import { importTerraformState, parseTerraformState } from './providers/terraform.js'
 import { providers } from './providers/index.js'
@@ -18,6 +18,18 @@ import type { Model } from './model/schema.js'
 import { loadHealthMap, unknownHealthIds } from './health.js'
 import { COMMENT_FILE, PREVIEW_FILE, parseTerraformPlan, previewPlan } from './preview.js'
 import { loadLatestSnapshot, loadPreviousSnapshot, takeSnapshot, writeSnapshot, writeToStore } from './snapshot.js'
+
+function collectList(value: string, previous: string[]): string[] {
+  return [...previous, value]
+}
+
+function parseGroupBy(value: string): 'group' | 'module' {
+  if (value === 'group' || value === 'module') return value
+  throw new InvalidArgumentError("expected 'group' or 'module'")
+}
+
+const GROUP_BY_HELP = "box nodes by each entity's group (the default) or by Terraform module, where a view does not say"
+const COLLAPSE_HELP = "draw a Terraform module as one node, repeatable ('*' for every top-level module), where a view does not say"
 
 const program = new Command()
 program
@@ -64,6 +76,8 @@ program
   .option('--direction <dir>', 'LR or TD', 'LR')
   .option('--health <file>', 'JSON file mapping entity ids to healthy, degraded, or down')
   .option('--no-icons', 'draw plain boxes instead of category icons')
+  .option('--group-by <how>', GROUP_BY_HELP, parseGroupBy)
+  .option('--collapse <module>', COLLAPSE_HELP, collectList, [])
   .option('-o, --out <file>', 'write to a file instead of stdout')
   .action(
     async (
@@ -74,6 +88,8 @@ program
         direction: string
         health?: string
         icons: boolean
+        groupBy?: 'group' | 'module'
+        collapse: string[]
         out?: string
       },
     ) => {
@@ -86,7 +102,11 @@ program
           console.error(`note: health file contains ${unknown.length} unknown entity id(s): ${unknown.join(', ')}`)
         }
       }
-      const result = await render(model, { view: opts.view, direction, health, icons: opts.icons }, opts.engine)
+      const result = await render(
+        model,
+        { view: opts.view, direction, health, icons: opts.icons, groupBy: opts.groupBy, collapse: opts.collapse },
+        opts.engine,
+      )
       if (result.fellBackFrom) {
         console.error(`note: ${result.fellBackFrom} unavailable, using ${result.renderer.name} (${result.via})`)
       }
@@ -249,6 +269,8 @@ program
   .option('--engine <name>', 'auto | mermaid | dot | graphviz', 'auto')
   .option('--direction <dir>', 'LR or TD', 'LR')
   .option('--no-icons', 'draw plain boxes instead of category icons')
+  .option('--group-by <how>', GROUP_BY_HELP, parseGroupBy)
+  .option('--collapse <module>', COLLAPSE_HELP, collectList, [])
   .option('-o, --out-dir <dir>', 'directory to write the snapshot into, when not using --store')
   .action(
     async (opts: {
@@ -266,6 +288,8 @@ program
       engine: string
       direction: string
       icons: boolean
+      groupBy?: 'group' | 'module'
+      collapse: string[]
       outDir?: string
     }) => {
       if (opts.store && opts.outDir) {
@@ -304,6 +328,8 @@ program
         engine: opts.engine,
         direction: opts.direction === 'TD' ? 'TD' : 'LR',
         icons: opts.icons,
+        groupBy: opts.groupBy,
+        collapse: opts.collapse,
       })
       if (bundle.fellBackFrom) {
         const d = bundle.snapshot.diagrams[0]
@@ -334,14 +360,27 @@ program
   .option('--model <file>', 'committed model, to say whether the plan departs from the design')
   .option('--title <text>', 'what the plan is for, e.g. the workspace or environment (defaults to the model name)')
   .option('--include-data-sources', 'include data sources as entities', false)
+  .option('--group-by <how>', "box nodes by each entity's group (the default) or by Terraform module", parseGroupBy)
+  .option('--collapse <module>', "draw a Terraform module as one node, repeatable ('*' for every top-level module)", collectList, [])
   .option('-o, --out-dir <dir>', `write ${COMMENT_FILE} and ${PREVIEW_FILE} here instead of printing the comment`)
-  .action((opts: { plan: string; model?: string; title?: string; includeDataSources: boolean; outDir?: string }) => {
+  .action(
+    (opts: {
+      plan: string
+      model?: string
+      title?: string
+      includeDataSources: boolean
+      groupBy?: 'group' | 'module'
+      collapse: string[]
+      outDir?: string
+    }) => {
     const plan = parseTerraformPlan(readFileSync(opts.plan, 'utf8'))
     const declared = opts.model ? requireModel(opts.model) : undefined
     const { preview, comment } = previewPlan(plan, {
       declared,
       title: opts.title,
       includeDataSources: opts.includeDataSources,
+      groupBy: opts.groupBy,
+      collapse: opts.collapse,
     })
     if (opts.outDir) {
       mkdirSync(opts.outDir, { recursive: true })

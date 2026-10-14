@@ -49,6 +49,8 @@ jobs:
 
       # Exits 0 whatever the plan does. The preview informs the review;
       # `driftwood reconcile` is the gate.
+      # Built from modules? Add `--group-by module` to box the diagram by
+      # module instead of by resource type.
       - name: Draw the preview
         run: |
           driftwood preview \

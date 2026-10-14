@@ -140,7 +140,7 @@ driftwood import terraform examples/orders-platform.tfstate.json \
 
 Entity ids are Terraform addresses (`aws_s3_bucket.assets`). That's deliberate: the address is stable across plans, readable in a diff, and sidesteps the identity-resolution problem that kills CMDBs. Edges come from Terraform's own `dependencies`.
 
-The raw state file and the output of `terraform show -json` both work, and produce the same model. A resource with `count` or `for_each` is one entity, not one per instance.
+The raw state file and the output of `terraform show -json` both work, and produce the same model. A resource with `count` or `for_each` is one entity, not one per instance. A *module* called with `count` or `for_each` is one module per instance (`module.svc["api"]`, `module.svc["worker"]`), because two instances of a module really are two things. Terraform records dependencies without those keys, so driftwood resolves them: inside a module they point at the same instance, and from outside it at every instance, which is all the state records.
 
 The worked example in `examples/` is a fictional e-commerce platform — CloudFront and Route 53 at the edge, an ALB in front of two ECS services, Postgres, Redis, DynamoDB and S3 behind them, and an SQS/SNS order pipeline with a Lambda worker. 45 resources: enough that the view mechanism is doing real work rather than decorating a diagram that fits on a page anyway.
 
@@ -227,6 +227,31 @@ Mermaid has no icon primitive, so it maps the *same* categorisation onto shapes 
 | `context` | Everything, minus IAM and CloudWatch noise | [svg](docs/context.svg) |
 
 **Views exist from v1, not as a later optimization.** Flat Mermaid becomes unreadable past roughly 150 nodes, and any real enterprise graph blows through that immediately. A view is a scoped slice matching entity ids or groups, with a trailing `*` wildcard. The example model ships six — `context`, `edge`, `app`, `data`, `async`, `network` — and even at 45 entities the difference between a view and the whole graph is the difference between a diagram and a wall.
+
+#### Group by module, or collapse one
+
+By default nodes are boxed by `group`, which for Terraform is the resource type's service (`ecs`, `s3`). An estate built from modules reads better boxed the way it was built:
+
+```bash
+driftwood render architecture.yaml --group-by module -o by-module.svg
+driftwood render architecture.yaml --collapse '*' -o overview.svg
+driftwood render architecture.yaml --collapse module.ecs_service -o services.svg
+```
+
+`--group-by module` draws one box per module instance. `--collapse` draws a module as a single node, labelled with how many resources it holds, and keeps every arrow that crosses its boundary. It is repeatable, and matches like a view does: `*` collapses every top-level module, `module.ecs_service` every instance of a counted one, and `module.ecs_service["api"]` just that one. A collapsed module takes the worst health inside it, and in a plan preview it is marked by what the plan does inside it. In the snapshot viewer, clicking it lists what it holds and what depends on any of it.
+
+A view can set either for itself, so one model can carry a collapsed overview and a detailed view of one module:
+
+```yaml
+views:
+  - id: overview
+    collapse: ['*']
+  - id: orders-service
+    include: ['module.orders_service*']
+    groupBy: module
+```
+
+The same two flags work on `snapshot` and `preview`, for diagrams whose view does not say. Neither changes the model: `group` stays what the importer wrote, so switching a picture to modules never shows up as drift. Entities from providers other than Terraform have no module path and are drawn as before.
 
 ### Reconcile — the point of the whole thing
 

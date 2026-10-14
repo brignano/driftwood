@@ -183,6 +183,20 @@ const SCRIPT = `
   var stage = document.getElementById('diagram');
   var panel = document.getElementById('selection');
   var current = null, selected = null;
+  // A collapsed Terraform module is one node standing for several entities.
+  // members maps its node id to them, and owner maps each of them back.
+  var members = {}, owner = new Map();
+  var inside = function (id) { return members[id] || [id]; };
+  var drawn = function (id) { return owner.get(id) || id; };
+  var HEALTH_RANK = { healthy: 0, degraded: 1, down: 2 };
+  function worstHealth(ids) {
+    var worst = null;
+    ids.forEach(function (n) {
+      var h = snap.health && snap.health[n];
+      if (h && (worst === null || HEALTH_RANK[h] > HEALTH_RANK[worst])) worst = h;
+    });
+    return worst;
+  }
 
   function nodesIn(root) {
     var map = new Map();
@@ -201,11 +215,15 @@ const SCRIPT = `
     stage.innerHTML = '';
     var tpl = document.getElementById('diagram-' + index);
     stage.appendChild(tpl.content.cloneNode(true));
+    members = d.members || {};
+    owner = new Map();
+    Object.keys(members).forEach(function (m) { members[m].forEach(function (n) { owner.set(n, m); }); });
     current = nodesIn(stage);
     current.forEach(function (g, id) {
-      if (added.has(id)) g.classList.add('dw-added');
-      else if (changed.has(id)) g.classList.add('dw-changed');
-      var h = snap.health && snap.health[id];
+      var ids = inside(id);
+      if (ids.every(function (n) { return added.has(n); })) g.classList.add('dw-added');
+      else if (ids.some(function (n) { return added.has(n) || changed.has(n); })) g.classList.add('dw-changed');
+      var h = worstHealth(ids);
       if (h === 'down' || h === 'degraded') g.classList.add('dw-' + h);
       g.addEventListener('click', function (ev) { ev.stopPropagation(); select(id); });
     });
@@ -218,7 +236,7 @@ const SCRIPT = `
       : d.renderer === 'mermaid'
         ? 'This snapshot was rendered as Mermaid, shown here as source. Snapshots rendered with Graphviz are interactive.'
         : '';
-    if (selected && !byId.has(selected)) selected = null;
+    if (selected && !byId.has(selected) && !members[selected]) selected = null;
     select(selected);
   }
 
@@ -237,13 +255,19 @@ const SCRIPT = `
       return;
     }
     var e = byId.get(id);
-    var affected = walk(id, into), depends = walk(id, out);
+    // For a collapsed module: everything outside it that reaches, or is
+    // reached from, anything inside it.
+    var self = inside(id), affected = new Set(), depends = new Set();
+    self.forEach(function (n) {
+      walk(n, into).forEach(function (x) { if (self.indexOf(x) < 0) affected.add(x); });
+      walk(n, out).forEach(function (x) { if (self.indexOf(x) < 0) depends.add(x); });
+    });
     if (svg && current) {
       var mark = function (ids, cls) {
-        ids.forEach(function (n) { var g = current.get(n); if (g) g.classList.add('dw-on', cls); });
+        ids.forEach(function (n) { var g = current.get(drawn(n)); if (g) g.classList.add('dw-on', cls); });
       };
-      mark([id], 'dw-selected'); mark(affected, 'dw-affected'); mark(depends, 'dw-depends');
-      var lit = new Set([id].concat(Array.from(affected), Array.from(depends)));
+      mark(affected, 'dw-affected'); mark(depends, 'dw-depends'); mark([id], 'dw-selected');
+      var lit = new Set([id].concat(Array.from(affected), Array.from(depends)).map(drawn));
       svg.querySelectorAll('g.edge').forEach(function (g) {
         var t = g.querySelector('title');
         if (!t) return;
@@ -251,17 +275,29 @@ const SCRIPT = `
         if (parts.length === 2 && lit.has(parts[0]) && lit.has(parts[1])) g.classList.add('dw-on');
       });
     }
-    panel.appendChild(el('p', e && e.name ? e.name : id, 'name'));
+    var label = members[id] ? id.replace(/(^|\\.)module\\./g, '$1') : id;
+    panel.appendChild(el('p', e && e.name ? e.name : label, 'name'));
     var dl = el('dl');
     var row = function (k, v) { if (v) { dl.appendChild(el('dt', k)); dl.appendChild(el('dd', v)); } };
     row('id', id);
     if (e) { row('kind', e.kind); row('group', e.group); row('platform', e.platform); row('source', e.source); }
-    if (snap.health && snap.health[id]) row('health', snap.health[id]);
+    if (members[id]) row('kind', 'Terraform module, ' + self.length + (self.length === 1 ? ' resource' : ' resources'));
+    var health = worstHealth(self);
+    if (health) row('health', health);
     if (added.has(id)) row('this deploy', 'added');
+    if (members[id]) {
+      var a = self.filter(function (n) { return added.has(n); }).length;
+      var c = self.filter(function (n) { return changed.has(n); }).length;
+      if (a || c) row('this deploy', a + ' added, ' + c + ' changed inside');
+    }
     (changed.get(id) || []).forEach(function (c) {
       row('this deploy', c.field + ': ' + (c.before || '-') + ' \\u2192 ' + (c.after || '-'));
     });
     panel.appendChild(dl);
+    if (members[id]) {
+      panel.appendChild(el('h2', 'Inside (' + self.length + ')'));
+      panel.appendChild(idList(new Set(self)));
+    }
     panel.appendChild(el('h2', 'Affected if this fails (' + affected.size + ')'));
     panel.appendChild(idList(affected));
     panel.appendChild(el('h2', 'Depends on (' + depends.size + ')'));
@@ -292,7 +328,8 @@ const SCRIPT = `
   var views = document.getElementById('views');
   data.diagrams.forEach(function (d, i) {
     var ids = Array.from(nodesIn(document.getElementById('diagram-' + i).content).keys());
-    var touched = ids.some(function (id) { return added.has(id) || changed.has(id); });
+    var held = [].concat.apply([], ids.map(function (id) { return (d.members || {})[id] || [id]; }));
+    var touched = held.some(function (id) { return added.has(id) || changed.has(id); });
     var b = el('button');
     b.setAttribute('role', 'tab');
     var name = el('span');
@@ -427,7 +464,10 @@ export function renderViewer(snapshot: Snapshot, files: Record<string, string>):
     .join('\n')
 
   // The page needs the model, changes and health, not the diagrams twice.
-  const data = { snapshot, diagrams: snapshot.diagrams.map((d) => ({ title: d.title, renderer: d.renderer })) }
+  const data = {
+    snapshot,
+    diagrams: snapshot.diagrams.map((d) => ({ title: d.title, renderer: d.renderer, members: d.members })),
+  }
 
   return `<!doctype html>
 <html lang="en">
