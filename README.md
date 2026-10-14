@@ -86,21 +86,55 @@ flowchart LR
 
 The model is the only thing in git. Providers write into it, renderers read from it, the reconciler diffs it. Because everything routes through one model, "static diagram vs. live health" and "2D vs. 3D" are rendering modes rather than rewrites — health is just an attribute on a node, and blast radius is a traversal over edges that already exist.
 
-## Install
+## Quick start
+
+You need Node 20+ and a Terraform project. Nothing else: no system packages, no cloud credentials of its own.
 
 ```bash
-npm install
-npm run build
+npm install -g @brignano/driftwood     # or prefix each command with npx @brignano/driftwood
 ```
 
-Running driftwood requires Node 20+. Runtime dependencies are `commander`, `yaml`, `zod`, and `@hpcc-js/wasm-graphviz` — all pure JavaScript/WebAssembly, no native builds and no system packages. (Developing driftwood asks for a newer Node than running it does — see [Development](#development).)
+Pick the one that matches what you want to see. Each reads JSON Terraform already produces, so your modules and configuration stay as they are.
+
+**What will this pull request change?** Draw a plan before it is applied:
+
+```bash
+terraform plan -lock=false -out=tfplan
+terraform show -json tfplan > plan.json
+driftwood preview --plan plan.json --out-dir preview
+```
+
+Open `preview/comment.md`, or paste it into a pull request: GitHub draws its diagram in place. Keep `plan.json` to yourself, because it can hold secrets in plain text.
+
+**What is deployed right now?** Snapshot the current state:
+
+```bash
+terraform show -json > state.json
+driftwood snapshot --terraform state.json --app my-service --env dev --build 1 -o snapshot
+```
+
+Open `snapshot/index.html` in a browser for the interactive diagram, and click a component to see its blast radius.
+
+**Put it in CI.** Copy a template from [`examples/`](examples/) and fill in your credentials step:
+
+| Template | Runs | Does |
+|---|---|---|
+| [`plan-preview.yml`](examples/plan-preview.yml) | on every pull request touching `.tf` | posts the plan diagram as one comment, edited on each push |
+| [`snapshot-after-deploy.yml`](examples/snapshot-after-deploy.yml) | at the end of a deploy | publishes the page above, with what this deploy changed |
+| [`drift-pr.yml`](examples/drift-pr.yml) | on a schedule | opens a pull request when infrastructure drifts from the committed model |
+
+Only the YAML syntax is GitHub-specific; every step is a shell command any CI can run. Everything below is the detail behind these three.
+
+Runtime dependencies are pure JavaScript and WebAssembly (Graphviz included), so a plain `npm install` works anywhere Node does. Developing driftwood asks for a newer Node than running it does; see [Development](#development).
 
 ## Usage
+
+The commands below use the worked example in `examples/`, so clone the repository to follow along. From a checkout, `npx tsx src/cli.ts` runs the same CLI without building.
 
 ### Import a model from Terraform state
 
 ```bash
-npx tsx src/cli.ts import terraform examples/orders-platform.tfstate.json \
+driftwood import terraform examples/orders-platform.tfstate.json \
   --name orders-platform -o examples/architecture.yaml
 ```
 
@@ -113,7 +147,7 @@ The worked example in `examples/` is a fictional e-commerce platform — CloudFr
 ### Validate
 
 ```bash
-npx tsx src/cli.ts validate examples/architecture.yaml
+driftwood validate examples/architecture.yaml
 ```
 
 Catches schema errors, duplicate ids, edges pointing at entities that don't exist, and views that match nothing. This is what makes agent edits safe to accept — a coding agent can rewrite the model and CI proves it's still coherent.
@@ -121,7 +155,7 @@ Catches schema errors, duplicate ids, edges pointing at entities that don't exis
 ### Render
 
 ```bash
-npx tsx src/cli.ts render examples/architecture.yaml --view app -o app.svg
+driftwood render examples/architecture.yaml --view app -o app.svg
 ```
 
 ![The app view: an ALB listener and target group feeding two ECS services and their task definitions](docs/app.svg)
@@ -137,7 +171,7 @@ Every image in this README is generated from `examples/architecture.yaml` by `np
 Runtime health can be overlaid without changing the committed model. Pass a JSON object whose keys are entity ids and whose values are `healthy`, `degraded`, or `down`:
 
 ```bash
-npx tsx src/cli.ts render examples/architecture.yaml --view context \
+driftwood render examples/architecture.yaml --view context \
   --health examples/health.json -o context-health.svg
 ```
 
@@ -197,7 +231,7 @@ Mermaid has no icon primitive, so it maps the *same* categorisation onto shapes 
 ### Reconcile — the point of the whole thing
 
 ```bash
-npx tsx src/cli.ts reconcile examples/architecture.yaml \
+driftwood reconcile examples/architecture.yaml \
   --terraform examples/orders-platform.drifted.tfstate.json
 ```
 
@@ -254,7 +288,7 @@ Exits **1** on drift and **0** when clean, so it works directly as a CI gate. Ou
 A report someone has to go and read is a report nobody reads. `--write-model` writes what was observed back into the model, so the drift arrives as a diff a reviewer can approve:
 
 ```bash
-npx tsx src/cli.ts reconcile examples/architecture.yaml \
+driftwood reconcile examples/architecture.yaml \
   --terraform examples/orders-platform.drifted.tfstate.json \
   --write-model examples/architecture.yaml \
   --exit-zero
