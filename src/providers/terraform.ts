@@ -1,5 +1,6 @@
 import type { Edge, Entity, Model } from '../model/schema.js'
 import { emptyModel } from '../model/schema.js'
+import { AddressIndex } from '../model/terraform-address.js'
 
 /**
  * Terraform state (format v4) as the first provider.
@@ -215,19 +216,23 @@ export function importTerraformState(input: TfState | TfShowJson, opts: ImportOp
     })
   }
 
+  // Dependencies are recorded without module keys, so they are resolved
+  // rather than looked up; see `AddressIndex`.
+  const index = new AddressIndex(known)
+  const seen = new Set<string>()
   for (const r of resources) {
     if (!r.type || !r.name) continue
     const from = address(r)
     if (!known.has(from)) continue
     for (const inst of r.instances ?? []) {
       for (const raw of inst.dependencies ?? []) {
-        const dep = resourceAddress(raw)
-        // Dependencies on filtered-out resources (e.g. data sources) would
-        // produce dangling edges, which the validator rightly rejects.
-        if (!known.has(dep)) continue
-        if (dep === from) continue
-        if (edges.some((e) => e.from === from && e.to === dep)) continue
-        edges.push({ from, to: dep, kind: 'depends-on' })
+        // Dependencies on filtered-out resources (e.g. data sources) resolve
+        // to nothing, rather than to dangling edges the validator rejects.
+        for (const dep of index.resolve(resourceAddress(raw), from)) {
+          if (dep === from || seen.has(`${from}\u0000${dep}`)) continue
+          seen.add(`${from}\u0000${dep}`)
+          edges.push({ from, to: dep, kind: 'depends-on' })
+        }
       }
     }
   }

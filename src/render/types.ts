@@ -1,5 +1,8 @@
 import type { Model } from '../model/schema.js'
 import type { HealthMap } from '../health.js'
+import type { GroupBy } from '../model/schema.js'
+
+export type { GroupBy }
 
 export interface RenderContext {
   view?: string
@@ -24,6 +27,10 @@ export interface RenderContext {
    * plan never shows a dependency that is going away as one that stays.
    */
   edgeMarks?: EdgeMark[]
+  /** How nodes are boxed when the view does not say. Defaults to `group`. */
+  groupBy?: GroupBy
+  /** Modules to draw as one node each when the view does not say. See `View.collapse`. */
+  collapse?: string[]
 }
 
 export interface EdgeMark {

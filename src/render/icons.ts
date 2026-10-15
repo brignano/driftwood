@@ -80,6 +80,7 @@ export type IconKey =
   | 'email'
   | 'monitoring'
   | 'user'
+  | 'module'
   | 'generic'
 
 interface Icon {
@@ -214,6 +215,11 @@ export const ICONS: Record<IconKey, Icon> = {
     family: 'other',
     body: '<circle cx="12" cy="7.6" r="4"/><path d="M4.4 20.6a7.6 7.6 0 0 1 15.2 0"/>',
   },
+  // A collapsed Terraform module: one box standing for the resources inside it.
+  module: {
+    family: 'other',
+    body: '<path d="M12 2.8 20.5 7.5v9L12 21.2 3.5 16.5v-9z"/><path d="M3.5 7.5 12 12.2l8.5-4.7M12 12.2v9"/>',
+  },
   generic: {
     family: 'other',
     body: '<rect x="3.4" y="3.4" width="17.2" height="17.2" rx="3.4"/><path d="M8.6 12h6.8"/>',
@@ -245,6 +251,9 @@ function rule(source: string, key: IconKey): [RegExp, IconKey] {
 }
 
 const KIND_ICONS: Array<[RegExp, IconKey]> = [
+  // Only the kind a collapsed module is drawn with (`module · 15 resources`),
+  // anchored so no provider's own `*_module` type lands here.
+  rule('^module(?:[^a-z0-9]|$)', 'module'),
   rule(`route53|hosted_?zone|dns|record_?set|${tok('record|zone|zones')}`, 'dns'),
   rule(`cloudfront|front_?door|fastly|akamai|${tok('cdn')}`, 'cdn'),
   rule(`certificate|${tok('acm|cert|certs|tls|ssl')}`, 'certificate'),

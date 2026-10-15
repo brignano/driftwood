@@ -1,7 +1,7 @@
 import type { Entity, Model } from '../model/schema.js'
 import { defineRenderer } from './types.js'
 import type { RenderContext } from './types.js'
-import { selectEntities } from './select.js'
+import { arrange } from './arrange.js'
 import { LIGHT } from '../design.js'
 import type { Swatch } from '../design.js'
 import { ICON_SIZE, MARKER_PREFIX, iconFor, kindLabel, marker, styleFor } from './icons.js'
@@ -64,16 +64,15 @@ function xml(text: string): string {
     .replace(/"/g, '&quot;')
 }
 
-export function renderDot(model: Model, ctx: RenderContext = {}): string {
-  const view = ctx.view ? model.views.find((v) => v.id === ctx.view) : undefined
-  if (ctx.view && !view) {
-    throw new Error(`unknown view: ${ctx.view} (have: ${model.views.map((v) => v.id).join(', ') || 'none'})`)
-  }
+export function renderDot(input: Model, inputCtx: RenderContext = {}): string {
+  // Scoping to the view, and any grouping or collapsing by module, happen
+  // here, before layout, so every engine draws the same nodes.
+  const { model, ctx } = arrange(input, inputCtx)
 
   // Off by default: DOT source is meant to be renderable by any Graphviz, and
   // a marker only becomes artwork if driftwood post-processes the SVG itself.
   const withIcons = ctx.icons === true
-  const entities = selectEntities(model, view)
+  const entities = model.entities
   const visible = new Set(entities.map((e) => e.id))
 
   const lines: string[] = [

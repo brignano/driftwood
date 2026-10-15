@@ -55,6 +55,9 @@ jobs:
             aws s3 cp --recursive "$SNAPSHOT_BUCKET/$APP/$DEPLOY_ENV/$latest/" "$dir/$latest/"
           fi
 
+      # Built from modules? Add `--group-by module`, or `--collapse '*'` to
+      # draw each top-level module as one node, unless your model's views
+      # already say how to draw them.
       - name: Snapshot this deploy
         run: |
           terraform show -json > /tmp/state.json
